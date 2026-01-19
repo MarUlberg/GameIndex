@@ -18,7 +18,7 @@ init()
 # ========================== SETUP ===========================
 # ============================================================
 
-SETUP_FILE = "setup.txt"
+CONFIG_FILE = "config.txt"
 
 def load_setup(path):
     if not os.path.exists(path):
@@ -34,7 +34,7 @@ def load_setup(path):
     return env
 
 
-SETUP = load_setup(SETUP_FILE)
+SETUP = load_setup(CONFIG_FILE)
 
 # ============================================================
 # ========================== PATHS ===========================
@@ -46,6 +46,7 @@ PLAYTIME_EXPORT  = "playtime_export.txt"
 SCANNER          = "game_scanner.py"
 
 RETROARCH_DIR         = SETUP["RETROARCH_DIR"]
+RETROARCH_CFG_DIR     = SETUP["RETROARCH_CFG_DIR"]
 RETROARCH_PLAYLIST_DIR = SETUP["RETROARCH_PLAYLIST_DIR"]
 RETROARCH_LOG_DIR     = SETUP["RETROARCH_LOG_DIR"]
 
@@ -58,6 +59,214 @@ PCSX2_PLAYTIME   = SETUP["PCSX2_PLAYTIME"]
 LAUNCHBOX_DATA_DIR   = SETUP["LAUNCHBOX_DATA_DIR"]
 LAUNCHBOX_PLATFORMS  = SETUP["LAUNCHBOX_PLATFORMS"]
 GAMES_DIR           = SETUP["GAMES_DIR"]
+
+# ============================================================
+# ========================= SYSTEMS ==========================
+# ============================================================
+
+SYSTEMS = {
+    "ARCADE": {
+        "platforms": [
+            "FBNeo - Arcade Games",
+        ],
+        "cores": [
+            "FinalBurn Neo",
+            "MAME",
+        ],
+    },
+
+    "GW": {
+        "platforms": [
+            "Handheld Electronic Game",
+        ],
+        "cores": [
+            "MAME",
+        ],
+    },
+
+    "GB": {
+        "platforms": [
+            "Nintendo - Game Boy",
+        ],
+        "cores": [
+            "Gambatte",
+            "SameBoy",
+            "Gearboy",
+            "TGB Dual",
+        ],
+    },
+
+    "GBC": {
+        "platforms": [
+            "Nintendo - Game Boy Color",
+        ],
+        "cores": [
+            "Gambatte",
+            "SameBoy",
+            "Gearboy",
+            "TGB Dual",
+        ],
+    },
+
+    "GBA": {
+        "platforms": [
+            "Nintendo - Game Boy Advance",
+        ],
+        "cores": [
+            "mGBA",
+            "gpSP",
+            "VBA Next",
+            "VBA-M",
+        ],
+    },
+
+    "NDS": {
+        "platforms": [
+            "Nintendo - Nintendo DS",
+        ],
+        "cores": [
+            "melonDS",
+            "DeSmuME",
+            "DeSmuME 2015",
+        ],
+    },
+
+    "3DS": {
+        "platforms": [
+            "Nintendo - Nintendo 3DS",
+        ],
+        "cores": [
+            "Citra",
+        ],
+    },
+
+    "NES": {
+        "platforms": [
+            "Nintendo - Nintendo Entertainment System",
+        ],
+        "cores": [
+            "Nestopia",
+            "FCEUmm",
+            "QuickNES",
+        ],
+    },
+
+    "SNES": {
+        "platforms": [
+            "Nintendo - Super Nintendo Entertainment System",
+        ],
+        "cores": [
+            "Snes9x",
+            "Snes9x 2005",
+            "Snes9x 2010",
+            "bsnes",
+            "bsnes HD",
+        ],
+    },
+
+    "N64": {
+        "platforms": [
+            "Nintendo - Nintendo 64",
+        ],
+        "cores": [
+            "Mupen64Plus-Next",
+            "ParaLLEl N64",
+        ],
+    },
+
+    "VB": {
+        "platforms": [
+            "Nintendo - Nintendo Virtual Boy",
+        ],
+        "cores": [
+            "Beetle VB",
+        ],
+    },
+
+    "GC": {
+        "platforms": [
+            "Nintendo - GameCube",
+        ],
+        "cores": [
+            "Dolphin",
+        ],
+    },
+
+    "WII": {
+        "platforms": [
+            "Nintendo - Wii",
+        ],
+        "cores": [
+            "Dolphin",
+        ],
+    },
+
+    "Genesis": {
+        "platforms": [
+            "Sega - Mega Drive",
+        ],
+        "cores": [
+            "Genesis Plus GX",
+            "PicoDrive",
+        ],
+    },
+
+    "Saturn": {
+        "platforms": [
+            "Sega - Saturn",
+        ],
+        "cores": [
+            "Beetle Saturn",
+            "Kronos",
+            "YabaSanshiro",
+        ],
+    },
+
+    "Dreamcast": {
+        "platforms": [
+            "Sega - Dreamcast",
+        ],
+        "cores": [
+            "Flycast",
+            "Flycast GLES2",
+            "Redream",
+        ],
+    },
+
+    "PSX": {
+        "platforms": [
+            "Sony - PlayStation",
+        ],
+        "cores": [
+            "Beetle PSX",
+            "Beetle PSX HW",
+            "SwanStation",
+            "PCSX-ReARMed",
+        ],
+    },
+
+    "PS2": {
+        "platforms": [
+            "Sony - Playstation 2",
+        ],
+        "cores": [
+            "PCSX2",
+        ],
+    },
+
+    "PSP": {
+        "platforms": [
+            "Sony - PlayStation Portable",
+        ],
+        "cores": [
+            "PPSSPP",
+        ],
+    },
+}
+
+PLATFORM_TO_SYSTEM = {plat: sys for sys, d in SYSTEMS.items() for plat in d["platforms"]}
+SYSTEM_TO_CORES = {sys: d["cores"] for sys, d in SYSTEMS.items()}
+PLATFORMS_ORDERED = [plat for d in SYSTEMS.values() for plat in d["platforms"]]
 
 # ============================================================
 # ========================= DATABASE =========================
@@ -135,19 +344,27 @@ def replace_lines_in_file(path, replacements):
         return
 
     with open(path, "r", encoding="utf-8") as f:
-        lines = f.read().splitlines()
+        text = f.read()
 
+    # Detect newline style
+    newline = "\r\n" if "\r\n" in text else "\n"
+    has_trailing_newline = text.endswith(("\n", "\r\n"))
+
+    lines = text.splitlines()
     out = []
+
     for line in lines:
         if line in replacements:
             out.append(replacements[line])
         else:
             out.append(line)
 
-    with open(path, "w", encoding="utf-8") as f:
-        for l in out:
-            f.write(l + "\n")
+    new_text = newline.join(out)
+    if has_trailing_newline:
+        new_text += newline
 
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(new_text)
 
 
 # ============================================================
@@ -157,46 +374,48 @@ def replace_lines_in_file(path, replacements):
 # ---------- RetroArch ----------
 
 def load_retroarch_playtime():
-    data = {}
+    out = {}
 
-    if not os.path.isdir(RETROARCH_LOG_DIR):
-        return data
+    logs_root = os.path.join(RETROARCH_PLAYLIST_DIR, "logs")
+    if not os.path.isdir(logs_root):
+        return out
 
-    for fname in os.listdir(RETROARCH_LOG_DIR):
-        if not fname.lower().endswith(".lrtl"):
-            continue
+    # Build allowed roots: logs/, logs/<platform>/, logs/<core>/
+    allowed_roots = [logs_root]
 
-        path = os.path.join(RETROARCH_LOG_DIR, fname)
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                raw = json.load(f)
-        except:
-            continue
+    for platform, system in PLATFORM_TO_SYSTEM.items():
+        plat_dir = os.path.join(logs_root, platform)
+        if os.path.isdir(plat_dir):
+            allowed_roots.append(plat_dir)
 
-        runtime = raw.get("runtime", "0:00:00")
-        last_played = raw.get("last_played", 0)
+        cores = SYSTEM_TO_CORES.get(system, [])
+        for core in cores:
+            core_dir = os.path.join(logs_root, core)
+            if os.path.isdir(core_dir):
+                allowed_roots.append(core_dir)
 
-        try:
-            h, m, s = map(int, runtime.split(":"))
-            seconds = h * 3600 + m * 60 + s
-        except:
-            seconds = 0
+    for root in allowed_roots:
+        for dirpath, _, files in os.walk(root):
+            for fname in files:
+                if not fname.lower().endswith(".lrtl"):
+                    continue
 
-        if isinstance(last_played, str):
-            try:
-                last_played = int(datetime.datetime.strptime(
-                    last_played, "%Y-%m-%d %H:%M:%S"
-                ).timestamp())
-            except:
-                last_played = 0
+                path = os.path.join(dirpath, fname)
+                rom = os.path.splitext(fname)[0]
 
-        key = os.path.splitext(fname)[0]
-        data[key] = {
-            "seconds": seconds,
-            "last_played": last_played
-        }
+                try:
+                    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                        for line in f:
+                            if line.startswith("Total playtime"):
+                                seconds = int(line.split(":")[1].strip())
+                                out[rom] = {
+                                    "seconds": seconds,
+                                    "last_played": None
+                                }
+                except:
+                    pass
 
-    return data
+    return out
 
 
 # ---------- Dolphin ----------
@@ -528,17 +747,24 @@ def build_rom_rename_plan(rom_dir, old_filename, new_filename):
     for fname in os.listdir(rom_dir):
         src = os.path.join(rom_dir, fname)
 
-        # Normal ROM + multi-dot save files (.0.mcr, .1.mcr, etc)
+        # Exact file rename (handles extension-only changes)
+        if fname == old_filename:
+            plan.append((src, os.path.join(rom_dir, new_filename)))
+            continue
+
+        # Normal ROM + multi-dot save files
         if fname.startswith(oldBase + "."):
             newName = newBase + fname[len(oldBase):]
-            plan.append((src, os.path.join(rom_dir, newName)))
+            if newName != fname:
+                plan.append((src, os.path.join(rom_dir, newName)))
 
         # Cue track bins
         if oldCue:
             base, track = bin_base(fname)
             if base == oldCueBase:
                 newName = newCueBase + track + ".bin"
-                plan.append((src, os.path.join(rom_dir, newName)))
+                if newName != fname:
+                    plan.append((src, os.path.join(rom_dir, newName)))
 
     return plan
 
@@ -557,36 +783,72 @@ def apply_renames(rename_plan):
     for src, dst in rename_plan:
         os.rename(src, dst)
 
-
 # ---------- Save files ----------
-
 def rename_save_files(old_file, new_file):
     oldbase = os.path.splitext(old_file)[0]
     newbase = os.path.splitext(new_file)[0]
 
     saves_root = os.path.join(RETROARCH_DIR, "saves")
 
-    for dirpath, _, files in os.walk(saves_root):
-        for fname in files:
-            if fname.startswith(oldbase + "."):
-                src = os.path.join(dirpath, fname)
-                dst = os.path.join(dirpath, newbase + fname[len(oldbase):])
-                if not os.path.exists(dst):
-                    os.rename(src, dst)
+    # Determine platform from ROM path context
+    # Caller guarantees correct working directory
+    platform = None
+    for plat in PLATFORMS_ORDERED:
+        plat_dir = os.path.join(GAMES_DIR, plat)
+        if os.path.isdir(plat_dir):
+            platform = plat
+            break
+
+    allowed_roots = [saves_root]
+
+    if platform:
+        system = PLATFORM_TO_SYSTEM.get(platform)
+        if system:
+            cores = SYSTEM_TO_CORES.get(system, [])
+
+            # Platform-named save folder
+            plat_path = os.path.join(saves_root, platform)
+            if os.path.isdir(plat_path):
+                allowed_roots.append(plat_path)
+
+            # Core-named save folders
+            for core in cores:
+                core_path = os.path.join(saves_root, core)
+                if os.path.isdir(core_path):
+                    allowed_roots.append(core_path)
+
+    for root in allowed_roots:
+        for dirpath, _, files in os.walk(root):
+            for fname in files:
+                if fname.startswith(oldbase + "."):
+                    src = os.path.join(dirpath, fname)
+                    dst = os.path.join(dirpath, newbase + fname[len(oldbase):])
+                    if not os.path.exists(dst):
+                        os.rename(src, dst)
 
 
 # ---------- CUE rewriting ----------
-
 def rewrite_cue_file(cue_path, oldBase, newBase):
-    with open(cue_path, "r", encoding="utf-8", errors="ignore") as f:
-        text = f.read()
-    text = text.replace(oldBase, newBase)
-    with open(cue_path, "w", encoding="utf-8") as f:
-        f.write(text)
+    lines = []
 
+    with open(cue_path, "r", encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            stripped = line.strip()
+            if stripped.upper().startswith("FILE ") and '"' in line:
+                try:
+                    prefix, rest = line.split('"', 1)
+                    filename, suffix = rest.split('"', 1)
+                    if filename.startswith(oldBase):
+                        filename = newBase + filename[len(oldBase):]
+                    line = prefix + '"' + filename + '"' + suffix
+                except:
+                    pass
+            lines.append(line)
+
+    with open(cue_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
 
 # ---------- Stem replacement ----------
-
 def replace_stem_in_file(path, oldStem, newStem):
     with open(path, "r", encoding="utf-8", errors="ignore") as f:
         text = f.read()
@@ -601,7 +863,7 @@ def replace_stem_in_file(path, oldStem, newStem):
 
     return True
 
-def replace_stem_in_tree(root, oldStem, newStem, extensions=None):
+def replace_stem_in_tree(root, oldStem, newStem, extensions=None, *_):
     for dirpath, _, files in os.walk(root):
         for name in files:
             if extensions and not name.lower().endswith(extensions):
@@ -628,7 +890,6 @@ def validate_row(row):
     if len(parts) != 6:
         raise ValueError("Invalid row: " + row)
     return parts
-
 
 def build_modify_plans(old_lines, new_lines, local_rows, play_rows):
     def parse(row):
@@ -691,7 +952,6 @@ def build_modify_plans(old_lines, new_lines, local_rows, play_rows):
 
     return replacements_local, replacements_play, rename_jobs, time_jobs
 
-
 def run_modify_direct(old_lines, new_lines):
     local_rows = load_local()
     play_rows = load_playtime_export()
@@ -700,45 +960,31 @@ def run_modify_direct(old_lines, new_lines):
         build_modify_plans(old_lines, new_lines, local_rows, play_rows)
 
     # ---- Renames ----
-    for rom_dir, old_file, new_file in rename_jobs:
-        plan = build_rom_rename_plan(os.path.join(GAMES_DIR, rom_dir), old_file, new_file)
-        apply_renames(plan)
-        rename_save_files(old_file, new_file)
+    apply_rename_jobs(rename_jobs)
 
-        if old_file.lower().endswith(".cue"):
-            rewrite_cue_file(
-                os.path.join(os.path.join(GAMES_DIR, rom_dir), new_file),
-                cue_base(old_file),
-                cue_base(new_file)
-            )
-
-        oldStem, _ = split_stem(old_file)
-        newStem, _ = split_stem(new_file)
-
-        replace_stem_in_tree(os.path.join(RETROARCH_DIR, "saves"), oldStem, newStem)
-        replace_stem_in_tree(RETROARCH_PLAYLIST_DIR, oldStem, newStem)
-        replace_stem_in_tree(os.path.join(RETROARCH_PLAYLIST_DIR, "logs"), oldStem, newStem)
-        replace_stem_in_tree(LAUNCHBOX_DATA_DIR, oldStem, newStem, (".xml",))
-
+    # ---- Databases ----
     replace_lines_in_file(LOCAL_DB, replacements_local)
     replace_lines_in_file(PLAYTIME_EXPORT, replacements_play)
 
+    # ---- Playtime ----
     for platform, gameid, filename, seconds, lastplayed in time_jobs:
         write_retroarch_time(filename, seconds, lastplayed)
         write_launchbox_time(platform, gameid, filename, seconds, lastplayed)
 
-        if platform in ("Nintendo - GameCube", "Nintendo - Wii"):
+        system = PLATFORM_TO_SYSTEM.get(platform)
+
+        if system in ("GC", "WII"):
             write_dolphin_time(gameid, seconds)
 
-        if platform == "Sony - Playstation 2":
+        if system == "PS2":
             write_pcsx2_time(gameid, seconds, lastplayed)
+
 
 # ============================================================
 # ===================== COMMAND ENGINE ======================
 # ============================================================
 
 # ---------- Scanner ----------
-
 def run_scanner(force=False):
     env = os.environ.copy()
     if force:
@@ -755,7 +1001,6 @@ def cmd_force_rescan():
 
 
 # ---------- Paths check ----------
-
 def cmd_check_paths():
     print("\n=== System Paths ===\n")
 
@@ -767,71 +1012,43 @@ def cmd_check_paths():
 
     rows = []
 
-    # ---------------- RetroArch core ----------------
     row("RetroArch Directory:", SETUP["RETROARCH_DIR"])
     row("RetroArch Games Directory:", SETUP["GAMES_DIR"])
 
-    # ---------------- Platforms (in desired order) ----------------
-    platforms = [
-        "FBNeo - Arcade Games",
-        "Handheld Electronic Game",
-        "Nintendo - Game Boy",
-        "Nintendo - Game Boy Advance",
-        "Nintendo - Nintendo DS",
-        "Nintendo - Nintendo 3DS",
-        "Nintendo - Nintendo Entertainment System",
-        "Nintendo - Super Nintendo Entertainment System",
-        "Nintendo - Nintendo Virtual Boy",
-        "Nintendo - Nintendo 64",
-        "Nintendo - GameCube",
-        "Nintendo - Wii",
-        "Sega - Mega Drive",
-        "Sega - Saturn",
-        "Sega - Dreamcast",
-        "Sony - PlayStation",
-        "Sony - Playstation 2",
-        "Sony - PlayStation Portable",
-    ]
-
-    for plat in platforms:
+    for plat in PLATFORMS_ORDERED:
         path = os.path.join(SETUP["GAMES_DIR"], plat)
         row(f"{plat} Directory:", path)
 
-    # ---------------- RetroArch tools ----------------
     row("RetroArch Playlists Directory:", SETUP["RETROARCH_PLAYLIST_DIR"])
     row("RetroArch Logs Directory:", SETUP["RETROARCH_LOG_DIR"])
-
-    # ---------------- Dolphin ----------------
     row("Dolphin Directory:", SETUP["DOLPHIN_DIR"])
     row("Dolphin playtime:", SETUP["DOLPHIN_PLAYTIME"])
-
-    # ---------------- PCSX2 ----------------
     row("PCSX2 Directory:", SETUP["PCSX2_DIR"])
     row("PCSX2 playtime:", SETUP["PCSX2_PLAYTIME"])
-
-    # ---------------- LaunchBox ----------------
     row("LaunchBox Data:", SETUP["LAUNCHBOX_DATA_DIR"])
 
-    # ---------------- Print nicely ----------------
     width = max(len(r[1]) for r in rows) + 2
     for s, label, path in rows:
         print(f"[{s}] {label:<{width}} {path}")
 
-    # ---------------- LaunchBox XML ----------------
     print("\n=== LaunchBox Platform XML ===\n")
 
     xml_rows = []
     for plat, fname in SETUP["LAUNCHBOX_PLATFORMS"].items():
         path = os.path.join(SETUP["LAUNCHBOX_DATA_DIR"], fname)
-        xml_rows.append(( f" {Fore.LIGHTGREEN_EX}OK{Style.RESET_ALL} " if os.path.exists(path) else f" {Fore.LIGHTRED_EX}XX{Style.RESET_ALL} ", plat, fname))
+        xml_rows.append((
+            f" {Fore.LIGHTGREEN_EX}OK{Style.RESET_ALL} " if os.path.exists(path) else f" {Fore.LIGHTRED_EX}XX{Style.RESET_ALL} ",
+            plat,
+            fname
+        ))
 
     w = max(len(r[1]) for r in xml_rows) + 2
     for s, plat, fname in xml_rows:
         print(f"[{s}] {plat:<{w}} {fname}")
 
-    # ---------------- Summary ----------------
-    all_ok = all(r[0] == "OK" for r in rows) and all(r[0] == "OK" for r in xml_rows)
-    print("\nStatus:", "ALL SYSTEMS OK" if all_ok else "ERRORS FOUND")
+    print("\nStatus:", "ALL SYSTEMS OK" if all(
+        os.path.exists(p) for _, _, p in rows
+    ) else "ERRORS FOUND")
 
 
 # ---------- Export ----------
@@ -857,6 +1074,8 @@ def cmd_export_playtime():
         except:
             continue
 
+        system = PLATFORM_TO_SYSTEM.get(platform)
+
         seconds = 0
         last_played = ""
 
@@ -868,12 +1087,12 @@ def cmd_export_playtime():
                     int(ra[rom]["last_played"])
                 ).strftime("%Y-%m-%d %H:%M:%S")
 
-        if game_id in pcsx2:
+        if system == "PS2" and game_id in pcsx2:
             seconds, last = pcsx2[game_id]
             if last:
                 last_played = last
 
-        if game_id in dolphin:
+        if system in ("GC", "WII") and game_id in dolphin:
             seconds = dolphin[game_id]
             if game_id in lb:
                 last_played = lb[game_id]
@@ -881,7 +1100,6 @@ def cmd_export_playtime():
         sep_color = f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} "
         sep_plain = " | "
 
-        # ----- plain (file) -----
         row_plain = (
             f"{platform}"
             f"{sep_plain}{title}"
@@ -891,7 +1109,6 @@ def cmd_export_playtime():
             f"{sep_plain}{file}"
         )
 
-        # ----- colored (console) -----
         row_color = (
             f"{platform}"
             f"{sep_color}{title}"
@@ -903,7 +1120,6 @@ def cmd_export_playtime():
 
         print(row_color)
         out.append(row_plain)
-
 
     save_playtime_export(out)
     print(f"Created {PLAYTIME_EXPORT} ({len(out)} entries)")
@@ -918,6 +1134,87 @@ def cmd_sync():
 
 # ---------- Modify ----------
 
+def apply_rename_jobs(rename_jobs):
+    for rom_dir, old_file, new_file in rename_jobs:
+        plan = build_rom_rename_plan(rom_dir, old_file, new_file)
+        apply_renames(plan)
+        rename_save_files(old_file, new_file)
+
+        if old_file.lower().endswith(".cue"):
+            rewrite_cue_file(
+                os.path.join(rom_dir, new_file),
+                cue_base(old_file),
+                cue_base(new_file)
+            )
+
+        replace_stem_in_tree(
+            RETROARCH_PLAYLIST_DIR,
+            old_file,
+            new_file
+        )
+
+        replace_stem_in_tree(
+            LAUNCHBOX_DATA_DIR,
+            old_file,
+            new_file,
+            (".xml",)
+        )
+
+        oldStem, _ = split_stem(old_file)
+        newStem, _ = split_stem(new_file)
+
+        # ---- Scoped save files ----
+        replace_stem_in_tree(
+            os.path.join(RETROARCH_DIR, "saves"),
+            oldStem,
+            newStem
+        )
+
+        platform = os.path.basename(rom_dir)
+        system = PLATFORM_TO_SYSTEM.get(platform)
+        if not system:
+            continue
+
+        cores = SYSTEM_TO_CORES.get(system)
+        if not cores:
+            continue
+
+        saves_root = os.path.join(RETROARCH_DIR, "saves")
+        logs_root = os.path.join(RETROARCH_PLAYLIST_DIR, "logs")
+
+        # Platform-named folders
+        plat_save = os.path.join(saves_root, platform)
+        plat_log = os.path.join(logs_root, platform)
+
+        if os.path.isdir(plat_save):
+            replace_stem_in_tree(plat_save, oldStem, newStem)
+
+        if os.path.isdir(plat_log):
+            replace_stem_in_tree(plat_log, oldStem, newStem)
+
+        # Core-named folders
+        for core in cores:
+            core_save = os.path.join(saves_root, core)
+            core_log = os.path.join(logs_root, core)
+
+            if os.path.isdir(core_save):
+                replace_stem_in_tree(core_save, oldStem, newStem)
+
+            if os.path.isdir(core_log):
+                replace_stem_in_tree(core_log, oldStem, newStem)
+
+        # ---- Scoped RetroArch configs ----
+        for core in cores:
+            core_cfg_dir = os.path.join(RETROARCH_CFG_DIR, core)
+            if not os.path.isdir(core_cfg_dir):
+                continue
+
+            replace_stem_in_tree(
+                core_cfg_dir,
+                oldStem,
+                newStem
+            )
+
 def cmd_modify():
     print("Paste OLD rows. Finish with an empty line.")
     old_lines = []
@@ -927,17 +1224,13 @@ def cmd_modify():
             break
         old_lines.append(line.strip())
 
-    print("\nPaste NEW rows. Finish with an empty line.")
+    print("\nPaste NEW rows.")
     new_lines = []
-    while True:
+    while len(new_lines) < len(old_lines):
         line = input()
         if not line.strip():
-            break
+            continue
         new_lines.append(line.strip())
-
-    if len(old_lines) != len(new_lines):
-        print("Old/New row count mismatch.")
-        return
 
     local_rows = load_local()
     play_rows = load_playtime_export()
@@ -949,59 +1242,51 @@ def cmd_modify():
         print(e)
         return
 
+    ext_changes = []
+    for _, old_file, new_file in rename_jobs:
+        if os.path.splitext(old_file)[1].lower() != os.path.splitext(new_file)[1].lower():
+            ext_changes.append((old_file, new_file))
+
+    if ext_changes:
+        print("\nYou are about to change the file extension of some files:")
+        for o, n in ext_changes:
+            print(f"  {o} → {n}")
+        resp = input("\nAre you sure you want to continue? Y/N: ").strip().lower()
+        if resp != "y":
+            print("Modify cancelled.")
+            return
 
     try:
         backup_tree_once(os.path.join(RETROARCH_DIR, "saves"))
 
-        for rom_dir, old_file, new_file in rename_jobs:
-            backup_file_once(os.path.join(GAMES_DIR, rom_dir, old_file))
-            plan = build_rom_rename_plan(os.path.join(GAMES_DIR, rom_dir), old_file, new_file)
-            apply_renames(plan)
+        for rom_dir, old_file, _ in rename_jobs:
+            backup_file_once(os.path.join(rom_dir, old_file))
 
-            rename_save_files(old_file, new_file)
-
-            if old_file.lower().endswith(".cue"):
-                rewrite_cue_file(
-                    os.path.join(os.path.join(GAMES_DIR, rom_dir), new_file),
-                    cue_base(old_file),
-                    cue_base(new_file)
-                )
-
-            oldStem, _ = split_stem(old_file)
-            newStem, _ = split_stem(new_file)
-
-            replace_stem_in_tree(os.path.join(RETROARCH_DIR, "saves"), oldStem, newStem)
-            replace_stem_in_tree(RETROARCH_PLAYLIST_DIR, oldStem, newStem)
-            replace_stem_in_tree(os.path.join(RETROARCH_PLAYLIST_DIR, "logs"), oldStem, newStem)
-            replace_stem_in_tree(LAUNCHBOX_DATA_DIR, oldStem, newStem, (".xml",))
+        apply_rename_jobs(rename_jobs)
 
         for platform, gameid, filename, seconds, lastplayed in time_jobs:
-            backup_file_once(os.path.join(RETROARCH_LOG_DIR, os.path.splitext(filename)[0] + ".lrtl"))
             write_retroarch_time(filename, seconds, lastplayed)
-            xml = LAUNCHBOX_PLATFORMS.get(platform)
-            if xml:
-                backup_file_once(os.path.join(LAUNCHBOX_DATA_DIR, xml))
-
             write_launchbox_time(platform, gameid, filename, seconds, lastplayed)
 
             if platform in ("Nintendo - GameCube", "Nintendo - Wii"):
-                backup_file_once(DOLPHIN_PLAYTIME)
                 write_dolphin_time(gameid, seconds)
 
             if platform == "Sony - Playstation 2":
-                backup_file_once(PCSX2_PLAYTIME)
                 write_pcsx2_time(gameid, seconds, lastplayed)
+
+        replace_lines_in_file(LOCAL_DB, replacements_local)
+        replace_lines_in_file(PLAYTIME_EXPORT, replacements_play)
 
         idx = next_history_index()
         for o, n in zip(old_lines, new_lines):
-            write_history(HISTORY, o, n, idx)
-            idx += 1
+            if o != n:
+                write_history(HISTORY, o, n, idx)
+                idx += 1
 
         print(f"Modify complete: {len(old_lines)} entries updated")
 
     except Exception as e:
         print("ERROR:", e)
-
 
 # ---------- Revert ----------
 

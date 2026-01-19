@@ -12,6 +12,7 @@ LAUNCHBOX_DATA_DIR = os.path.join(LAUNCHBOX_DIR, "Data", "Platforms")
 # ---------------- LaunchBox Platform XML ----------------
 LAUNCHBOX_PLATFORMS = {
     "FBNeo - Arcade Games": 							"Arcade.xml",
+    "Handheld Electronic Game": 						"Game & Watch.xml",
     "Nintendo - Game Boy": 								"Nintendo Game Boy Color.xml",
     "Nintendo - Game Boy Advance": 						"Nintendo Game Boy Advance.xml",
     "Nintendo - Nintendo DS": 							"Nintendo DS.xml",
@@ -33,6 +34,7 @@ LAUNCHBOX_PLATFORMS = {
 # ---------------- RetroArch ----------------
 
 RETROARCH_DIR = r"H:\LaunchBox\!Emulators\RetroArch"
+RETROARCH_CFG_DIR = os.path.join(RETROARCH_DIR, "config")
 RETROARCH_PLAYLIST_DIR = os.path.join(RETROARCH_DIR, "playlists")
 RETROARCH_LOG_DIR = os.path.join(RETROARCH_PLAYLIST_DIR, "logs")
 

@@ -14,7 +14,7 @@ init()
 # ========================== SETUP ===========================
 # ============================================================
 
-SETUP_FILE = "setup.txt"
+CONFIG_FILE = "config.txt"
 
 PRINT_ALL = True # If True shows every game as it is scanned
 SKIP_SCAN = False # If True skips ROM scan and moves on to GameID.py (For testing)
@@ -38,7 +38,7 @@ def load_setup(path):
 # ========================== PATHS ===========================
 # ============================================================
 
-_setup = load_setup(SETUP_FILE)
+_setup = load_setup(CONFIG_FILE)
 
 RETROARCH_DIR = _setup["RETROARCH_DIR"]
 GAMES_DIR     = _setup["GAMES_DIR"]
@@ -74,32 +74,32 @@ DOLPHIN_TOOL = _setup["DOLPHIN_TOOL"]
 
 SYSTEMS = [
     # Arcade 
-    ("ARCADE",    "FBNeo - Arcade Games",                 ARC_DIR,   None),
+#    ("ARCADE",    "FBNeo - Arcade Games",                 ARC_DIR,   None),
 
     # Nintendo handhelds
     ("GW",        "Handheld Electronic Game",             NGW_DIR,   None),
     ("GBC",       "Nintendo - Game Boy",                  GBC_DIR,   (".gb", ".gbc")),
-    ("GBA",       "Nintendo - Game Boy Advance",          GBA_DIR,   (".gba",)),
-    ("NDS",       "Nintendo - Nintendo DS",               NDS_DIR,   (".nds",)),
-    ("3DS",       "Nintendo - Nintendo 3DS",              N3DS_DIR,  (".3ds",)),
+#    ("GBA",       "Nintendo - Game Boy Advance",          GBA_DIR,   (".gba",)),
+#    ("NDS",       "Nintendo - Nintendo DS",               NDS_DIR,   (".nds",)),
+#    ("3DS",       "Nintendo - Nintendo 3DS",              N3DS_DIR,  (".3ds",)),
 
     # Nintendo consoles
-    ("NES",       "Nintendo - Nintendo Entertainment System",        NES_DIR,  (".nes",)),
-    ("SNES",      "Nintendo - Super Nintendo Entertainment System",  SNES_DIR, (".sfc", ".smc")),
-    ("VB",        "Nintendo - Nintendo Virtual Boy",      NVB_DIR,   (".vb", ".vboy", ".bin")),
-    ("N64",       "Nintendo - Nintendo 64",               N64_DIR,   (".z64", ".n64", ".v64")),
-    ("GC",        "Nintendo - GameCube",                  NGC_DIR,   (".iso", ".gcm", ".rvz", ".wbfs")),
-    ("WII",       "Nintendo - Wii",                       WII_DIR,   (".iso", ".wbfs", ".rvz")),
+#    ("NES",       "Nintendo - Nintendo Entertainment System",        NES_DIR,  (".nes",)),
+#    ("SNES",      "Nintendo - Super Nintendo Entertainment System",  SNES_DIR, (".sfc", ".smc")),
+#    ("VB",        "Nintendo - Nintendo Virtual Boy",      NVB_DIR,   (".vb", ".vboy", ".bin")),
+#    ("N64",       "Nintendo - Nintendo 64",               N64_DIR,   (".z64", ".n64", ".v64")),
+#    ("GC",        "Nintendo - GameCube",                  NGC_DIR,   (".iso", ".gcm", ".rvz", ".wbfs")),
+#    ("WII",       "Nintendo - Wii",                       WII_DIR,   (".iso", ".wbfs", ".rvz")),
 
     # Sega
-    ("Genesis",   "Sega - Mega Drive",                    SMD_DIR,   (".md", ".bin", ".smd", ".gen")),
-    ("Saturn",    "Sega - Saturn",                        SSA_DIR,   (".cue", ".iso", ".chd")),
-    ("Dreamcast", "Sega - Dreamcast",                     SDC_DIR,   (".gdi", ".cue", ".chd")),
+#    ("Genesis",   "Sega - Mega Drive",                    SMD_DIR,   (".md", ".bin", ".smd", ".gen")),
+#    ("Saturn",    "Sega - Saturn",                        SSA_DIR,   (".cue", ".iso", ".chd")),
+#    ("Dreamcast", "Sega - Dreamcast",                     SDC_DIR,   (".gdi", ".cue", ".chd")),
     
     # Sony
-    ("PSX",       "Sony - PlayStation",                   PSX_DIR,   (".cue", ".iso", ".chd")),
-    ("PS2",       "Sony - PlayStation 2",                 PS2_DIR,   (".iso", ".chd")),
-    ("PSP",       "Sony - PlayStation Portable",          PSP_DIR,   (".iso", ".cso", ".chd")),
+#    ("PSX",       "Sony - PlayStation",                   PSX_DIR,   (".cue", ".iso", ".chd")),
+#    ("PS2",       "Sony - PlayStation 2",                 PS2_DIR,   (".iso", ".chd")),
+#    ("PSP",       "Sony - PlayStation Portable",          PSP_DIR,   (".iso", ".cso", ".chd")),
 ]
 
 SYSTEM_TO_DB_SECTIONS = {
@@ -130,7 +130,6 @@ SYSTEM_TO_DB_SECTIONS = {
     "PSX": ["Sony - PlayStation"],
     "PS2": ["Sony - PlayStation 2"],
     "PSP": ["Sony - PlayStation Portable"],
-
 }
 
 # ============================================================
@@ -240,15 +239,42 @@ def get_gameid_and_title_from_gameid_py(path, system):
 
     return game_id, game_id_source, title, title_source, data.get("crc")
     
-def split_filename(filename):
-    tags = re.findall(r"\[[^\]]+\]", filename)
+# Case-insensitive, literal match
+CODEWORDS = [
+    "(patched)", "[patched]", "(hack)", "[hack]",
+]
 
-    base = filename
+def split_filename(filename):
+
+    name = filename
+
+    # -----------------------------------------------
+    # Remove codewords first (even if bracketed)
+    # -----------------------------------------------
+    lowered = name.lower()
+    for cw in CODEWORDS:
+        cw_l = cw.lower()
+        if cw_l in lowered:
+            name = re.sub(
+                re.escape(cw),
+                "",
+                name,
+                flags=re.I
+            )
+            lowered = name.lower()
+
+    # -----------------------------------------------
+    # Extract remaining [tags]
+    # -----------------------------------------------
+    tags = re.findall(r"\[[^\]]+\]", name)
+
+    base = name
     for t in tags:
         base = base.replace(t, "")
 
     base = re.sub(r"\s+", " ", base).strip()
     return base, tags
+
 
 def normalize_db_lookup_id(game_id, system):
     if not game_id:
@@ -320,6 +346,19 @@ def resolve_title(
     filename_title = clean_title(base)
 
     # --------------------------------------------------
+    # CODEWORD OVERRIDE → FORCE FILENAME
+    # --------------------------------------------------
+    lowered = filename.lower()
+    for cw in CODEWORDS:
+        if cw.lower() in lowered:
+            return (
+                filename_title,
+                "filename",
+                game_id,
+                gameid_source,
+            )
+
+    # --------------------------------------------------
     # override
     # --------------------------------------------------
     if gameid_title and gameid_source == "override":
@@ -367,7 +406,6 @@ def resolve_title(
 
     # --------------------------------------------------
     # LATE GameID.py escalation
-    # Only to beat filename, only if never run
     # --------------------------------------------------
     if (
         path
@@ -673,7 +711,7 @@ def scan_gamewatch():
         return out
 
     for filename in sorted(os.listdir(NGW_DIR)):
-        if not filename.lower().endswith((".zip")):
+        if not filename.lower().endswith((".zip", ".7z")):
             continue
 
         path = os.path.join(NGW_DIR, filename)
