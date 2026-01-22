@@ -39324,7 +39324,6 @@ T-21502G = Zork I: The Great Underground Empire
 T-37901G = Étude Prologue: Yureugoku Kokoro no Katachi
 
 [Sega - Dreamcast]	
-
 SCLX-2004-(8848) = 09 Chairs
 51064 = 18 Wheeler: American Pro Trucker
 HDR-0080 = 18 Wheeler: American Pro Trucker
