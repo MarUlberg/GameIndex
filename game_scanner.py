@@ -42,135 +42,7 @@ _setup = load_setup(CONFIG_FILE)
 
 RETROARCH_DIR = _setup["RETROARCH_DIR"]
 GAMES_DIR     = _setup["GAMES_DIR"]
-
-ARC_DIR  = _setup["ARC_DIR"]
-
-NGW_DIR  = _setup["NGW_DIR"]
-GBC_DIR  = _setup["GBC_DIR"]
-GBA_DIR  = _setup["GBA_DIR"]
-NDS_DIR  = _setup["NDS_DIR"]
-N3DS_DIR = _setup["N3DS_DIR"]
-
-NES_DIR  = _setup["NES_DIR"]
-SNES_DIR = _setup["SNES_DIR"]
-NVB_DIR  = _setup["NVB_DIR"]
-N64_DIR  = _setup["N64_DIR"]
-NGC_DIR  = _setup["NGC_DIR"]
-WII_DIR  = _setup["WII_DIR"]
-
-SMD_DIR  = _setup["SMD_DIR"]
-SSA_DIR  = _setup["SSA_DIR"]
-SDC_DIR  = _setup["SDC_DIR"]
-
-PSX_DIR  = _setup["PSX_DIR"]
-PS2_DIR  = _setup["PS2_DIR"]
-PSP_DIR  = _setup["PSP_DIR"]
-
 DOLPHIN_TOOL = _setup["DOLPHIN_TOOL"]
-
-# ============================================================
-# ========================= SYSTEMS ==========================
-# ============================================================
-
-SYSTEMS = [
-    # Arcade 
-#    ("ARCADE",    "FBNeo - Arcade Games",                 ARC_DIR,   None),
-
-    # Nintendo handhelds
-    ("GW",        "Handheld Electronic Game",             NGW_DIR,   None),
-    ("GBC",       "Nintendo - Game Boy",                  GBC_DIR,   (".gb", ".gbc")),
-#    ("GBA",       "Nintendo - Game Boy Advance",          GBA_DIR,   (".gba",)),
-#    ("NDS",       "Nintendo - Nintendo DS",               NDS_DIR,   (".nds",)),
-#    ("3DS",       "Nintendo - Nintendo 3DS",              N3DS_DIR,  (".3ds",)),
-
-    # Nintendo consoles
-#    ("NES",       "Nintendo - Nintendo Entertainment System",        NES_DIR,  (".nes",)),
-#    ("SNES",      "Nintendo - Super Nintendo Entertainment System",  SNES_DIR, (".sfc", ".smc")),
-#    ("VB",        "Nintendo - Nintendo Virtual Boy",      NVB_DIR,   (".vb", ".vboy", ".bin")),
-#    ("N64",       "Nintendo - Nintendo 64",               N64_DIR,   (".z64", ".n64", ".v64")),
-#    ("GC",        "Nintendo - GameCube",                  NGC_DIR,   (".iso", ".gcm", ".rvz", ".wbfs")),
-#    ("WII",       "Nintendo - Wii",                       WII_DIR,   (".iso", ".wbfs", ".rvz")),
-
-    # Sega
-#    ("Genesis",   "Sega - Mega Drive",                    SMD_DIR,   (".md", ".bin", ".smd", ".gen")),
-#    ("Saturn",    "Sega - Saturn",                        SSA_DIR,   (".cue", ".iso", ".chd")),
-#    ("Dreamcast", "Sega - Dreamcast",                     SDC_DIR,   (".gdi", ".cue", ".chd")),
-    
-    # Sony
-#    ("PSX",       "Sony - PlayStation",                   PSX_DIR,   (".cue", ".iso", ".chd")),
-#    ("PS2",       "Sony - PlayStation 2",                 PS2_DIR,   (".iso", ".chd")),
-#    ("PSP",       "Sony - PlayStation Portable",          PSP_DIR,   (".iso", ".cso", ".chd")),
-]
-
-SYSTEM_TO_DB_SECTIONS = {
-    "ARCADE": ["FBNeo - Arcade Games"],
-
-    # Nintendo handhelds
-    "GW":  ["Handheld Electronic Game"],
-    "GB":  ["Nintendo - Game Boy", "Nintendo - Game Boy Color"],
-    "GBC": ["Nintendo - Game Boy", "Nintendo - Game Boy Color"],
-    "GBA": ["Nintendo - Game Boy Advance",],
-    "NDS": ["Nintendo - Nintendo DS",],
-    "3DS": ["Nintendo - Nintendo 3DS", ],
-
-    # Nintendo consoles
-    "NES":  ["Nintendo - Nintendo Entertainment System"],
-    "SNES": ["Nintendo - Super Nintendo Entertainment System"],
-    "N64":  ["Nintendo - Nintendo 64"],
-    "VB":   ["Nintendo - Virtual Boy"],
-    "GC":  ["Nintendo - GameCube and Nintendo - Wii"],
-    "WII": ["Nintendo - GameCube and Nintendo - Wii"],
-
-    # Sega
-    "Genesis":   ["Sega - Mega Drive"],
-    "Saturn":    ["Sega - Saturn"],
-    "Dreamcast": ["Sega - Dreamcast"],
-    
-    # Sony
-    "PSX": ["Sony - PlayStation"],
-    "PS2": ["Sony - PlayStation 2"],
-    "PSP": ["Sony - PlayStation Portable"],
-}
-
-# ============================================================
-# ========================== REGEX ===========================
-# ============================================================
-
-# ----- GameID.py output -----
-RE_TITLE     = re.compile(r"^title\s+(.+)", re.I)
-RE_INT_TITLE = re.compile(r"^internal_title\s+(.+)", re.I)
-RE_CRC       = re.compile(r"^crc32\s+([0-9a-f]{8})", re.I)
-RE_ID        = re.compile(r"^ID\s+([A-Z0-9\-_.]+)", re.I)
-RE_MAKER     = re.compile(r"^maker_code\s+([A-Z0-9]{2})", re.I)
-RE_SERIAL    = re.compile(r"^serial\s+(.+)", re.I)
-
-ID_PATTERNS = {
-    "GW":        r"[A-Z]{2}-[0-9]{2,3}[A-Z]?",
-    "GB":        r"DMG-[A-Z0-9]{4}",
-    "GBC":       r"(?:CGB|DMG)-[A-Z0-9]{4}",
-    "GBA":       r"AGB-[A-Z0-9]{4}",
-    "NDS":       r"[A-Z]{4}[A-Z0-9]{4}",
-    "3DS":       r"(?:CTR|KTR|BBB)-[A-Z0-9]{4}",
-    "NES":       r"[A-Z0-9]{3,6}",
-    "SNES":      r"(?:SHVC|SNSP|SNS|SFT)[-_]?[A-Z0-9]{2,6}",
-    "VB":        r"[A-Z0-9]{3,8}",
-    "N64":       r"NUS-[A-Z0-9]{4}",
-    "GC":        r"[A-Z]{4}[0-9]{2}",
-    "WII":       r"[A-Z]{4}[0-9]{2}",
-    "Genesis":   r"(?:T-[0-9]{4,7}[A-Z]?|MK-[0-9]{5,8}|HDR-[0-9]{4,6}|\b[0-9]{4}\b)",
-    "Saturn":    r"(?:T-[0-9]{7}|GS-[0-9]{4}|MK-[0-9]{3}|SGS-[0-9]{3})",
-    "Dreamcast": r"(?:T-[0-9]{4,5}[A-Z]?|HDR-[0-9]{4,6}|MK-[0-9]{5,8})",
-    "PSX":       r"(?:SLUS|SLES|SLPS|SLPM|SCUS|SCES|SCED|SCPS|SLED|HDR|PCPX|PAPX|PBPX|DTL)[_\-\.]?\d{3}[_\-\.]?\d{2}",
-    "PS2":       r"(?:SLES|SLPM|SLUS|SLPS|SCED|SCES|SCUS|SLKA|SCPS|SLED|SCKA|SCAJ|PCPX|PAPX|PBPX|SCCS|TCES|SCPN|TLES|PSXC|SCPM)[_\-\.]?\d{3}[_\-\.]?\d{2}",
-    "PSP":       r"(?:ULES|ULJM|ULUS|ULJS|UCES|UCUS|ULKS|UCAS|UCJS|ULAS|UCKS|UCET|UCED|UCJP|UCJX|ULET|UCJB|ROSE|UTST|HONEY|KAD)[_\-\.]?\d{3}[_\-\.]?\d{2}",
-}
-
-STRICT_ID_RE = {}
-FILENAME_ID_RE = {}
-
-for sys, pat in ID_PATTERNS.items():
-    STRICT_ID_RE[sys] = re.compile(rf"^{pat}$")
-    FILENAME_ID_RE[sys] = re.compile(rf"(?<![A-Z0-9])({pat})(?![A-Z0-9])")
 
 # ============================================================
 # ====================== SHARED HELPERS ======================
@@ -185,9 +57,9 @@ def find_games(root, exts):
             if f.lower().endswith(exts):
                 yield os.path.join(d, f)
 
-def get_gameid_and_title_from_gameid_py(path, system):
+def get_gameid_and_title_from_gameid_py(path, system, gameidkey):
     try:
-        out = run_gameid(path, system)
+        out = run_gameid(path, gameidkey[0])
         data = parse_gameid_output(out)
     except Exception:
         return None, None, None, None, None
@@ -196,7 +68,7 @@ def get_gameid_and_title_from_gameid_py(path, system):
     title = None
 
     # --------------------------------------------------
-    # Game ID extraction
+    # Game ID extraction + normalization
     # --------------------------------------------------
     if system == "GC":
         # Wii / GameCube: 4-char ID + 2-char maker
@@ -206,10 +78,15 @@ def get_gameid_and_title_from_gameid_py(path, system):
             game_id = (gid + maker).upper()
         elif gid:
             game_id = gid.upper()
+
     else:
         game_id = data.get("serial") or data.get("game_id")
         if game_id:
             game_id = game_id.upper()
+
+            # 🔑 Normalize Sega-family IDs HERE
+            if system in ("Genesis", "SegaCD", "Saturn", "Dreamcast"):
+                game_id = normalize_sega_id(game_id)
 
     # --------------------------------------------------
     # Title extraction + cleanup (fixed-width safe)
@@ -217,13 +94,9 @@ def get_gameid_and_title_from_gameid_py(path, system):
     title = data.get("title") or data.get("internal")
 
     if title:
-        # Remove NUL padding from fixed-width disc headers
         title = title.replace("\x00", "")
-
-        # Collapse whitespace
         title = re.sub(r"\s+", " ", title).strip()
 
-        # Normalize trailing articles: "Sims, The" → "The Sims"
         m = re.match(r"^(.*?),\s*(THE|A|AN)(.*)$", title, re.I)
         if m:
             base, art, rest = m.groups()
@@ -238,7 +111,7 @@ def get_gameid_and_title_from_gameid_py(path, system):
     title_source = "gameid.py" if title else None
 
     return game_id, game_id_source, title, title_source, data.get("crc")
-    
+
 # Case-insensitive, literal match
 CODEWORDS = [
     "(patched)", "[patched]", "(hack)", "[hack]",
@@ -334,106 +207,6 @@ def clean_title(base):
 
     return title
 
-def resolve_title(
-    game_id,
-    gameid_title,
-    filename,
-    path,
-    system,
-    gameid_source,
-):
-    base, tags = split_filename(filename)
-    filename_title = clean_title(base)
-
-    # --------------------------------------------------
-    # CODEWORD OVERRIDE → FORCE FILENAME
-    # --------------------------------------------------
-    lowered = filename.lower()
-    for cw in CODEWORDS:
-        if cw.lower() in lowered:
-            return (
-                filename_title,
-                "filename",
-                game_id,
-                gameid_source,
-            )
-
-    # --------------------------------------------------
-    # override
-    # --------------------------------------------------
-    if gameid_title and gameid_source == "override":
-        return (
-            " ".join([gameid_title] + tags),
-            "override",
-            game_id,
-            gameid_source,
-        )
-
-    # --------------------------------------------------
-    # database
-    # --------------------------------------------------
-    if not SKIP_DATABASE and game_id:
-        db_title = lookup_db_title(game_id, system)
-        if db_title:
-            return (
-                " ".join([db_title] + tags),
-                "database",
-                game_id,
-                gameid_source,
-            )
-
-    # --------------------------------------------------
-    # gameid.py (early, if already run)
-    # --------------------------------------------------
-    if gameid_title and gameid_source == "gameid.py":
-        return (
-            " ".join([gameid_title] + tags),
-            "gameid.py",
-            game_id,
-            gameid_source,
-        )
-
-    # --------------------------------------------------
-    # dolphintool (early, if already run)
-    # --------------------------------------------------
-    if gameid_title and gameid_source == "dolphintool":
-        return (
-            " ".join([gameid_title] + tags),
-            "dolphintool",
-            game_id,
-            gameid_source,
-        )
-
-    # --------------------------------------------------
-    # LATE GameID.py escalation
-    # --------------------------------------------------
-    if (
-        path
-        and path.lower().endswith(SUPPORTED_GAMEID_EXTS)
-        and gameid_source not in ("gameid.py", "dolphintool", "crc")
-    ):
-        gid2, gid2_src, title2, title2_src, _ = get_gameid_and_title_from_gameid_py(
-            path, system.split(" - ")[-1]
-        )
-
-        if title2 and not title2.isupper():
-            return (
-                " ".join([title2] + tags),
-                "gameid.py",
-                gid2 or game_id,
-                gid2_src or gameid_source,
-            )
-
-    # --------------------------------------------------
-    # filename (final fallback)
-    # --------------------------------------------------
-    return (
-        " ".join([filename_title] + tags),
-        "filename",
-        game_id,
-        gameid_source,
-    )
-
 
 def detect_sector_mode(cue):
     sector, offset = 2352, 24
@@ -446,15 +219,6 @@ def detect_sector_mode(cue):
                 return 2352, 24
     return sector, offset
     
-def resolve_bin(cue):
-    with open(cue, "r", encoding="utf-8", errors="ignore") as f:
-        for line in f:
-            if "BINARY" in line.upper():
-                return os.path.join(
-                    os.path.dirname(cue),
-                    line.split('"')[1]
-                )
-    return None
 
 # ---------------------- CRC32 -------------------------------
 
@@ -470,28 +234,28 @@ def crc32_file(path, skip_header=0):
             crc = zlib.crc32(chunk, crc)
     return f"{crc & 0xffffffff:08x}"   # lowercase hex
 
-def load_3ds_serial_database(path="3dsserialdatabase.txt"):
-    db = {}
+# ============================================================
+# ======================== OVERRIDE ==========================
+# ============================================================
 
-    if not os.path.exists(path):
-        return db
+def scan_override(filename):
+    """
+    Detect special override titles (e.g. CodeBreaker).
+    Returns (gameid_title, game_id, gameid_source) or None.
+    """
+    cb = re.search(
+        r"(code[\s._-]*breaker|codebreaker|cb)[\s._-]*(?:version|ver|v)?[\s._-]*(\d+(?:\.\d+)?)",
+        filename,
+        re.I
+    )
+    if cb:
+        v = cb.group(2)
+        return (
+            f"CodeBreaker v{v}",
+            f"CODE-BRK{v.replace('.', '')}",
+        )
 
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" not in line:
-                continue
-
-            k, v = line.split("=", 1)
-            k = k.strip().upper()
-            v = v.strip().upper()
-
-            if re.fullmatch(r"[0-9A-F]{16}", k) and re.fullmatch(r"(CTR|KTR|BBB)-[A-Z0-9]{4}", v):
-                db[k] = v
-
-    return db
+    return None
 
 # ============================================================
 # ================== GAMEID + FALLBACK CORE =================
@@ -532,7 +296,11 @@ def lookup_db_title(game_id, system):
     if not game_id:
         return None
 
-    sections = SYSTEM_TO_DB_SECTIONS.get(system)
+    cfg = SYSTEMS.get(system)
+    if not cfg:
+        return None
+
+    sections = cfg.get("db_sections")
     if not sections:
         return None
 
@@ -555,14 +323,10 @@ def lookup_db_title(game_id, system):
         # Game & Watch: "alias | Title"
         # ==================================================
         if section == "Handheld Electronic Game":
-            # Always return the title part
             if "|" in value:
                 return value.split("|", 1)[1].strip()
             return value.strip()
 
-        # ==================================================
-        # Normal systems
-        # ==================================================
         return value.strip()
 
     return None
@@ -600,27 +364,41 @@ def parse_gameid_output(text):
 
         lower = line.lower()
 
-        # Serial / ID (preferred)
+        # --------------------------------------------------
+        # Serial / ID
+        # --------------------------------------------------
         if lower.startswith(("id", "serial")):
-            val = line.split(None, 1)[1].strip()
+            val = line.split(None, 1)[1].strip().upper()
 
-            # Accept GBA-style IDs
+            # Accept Nintendo-style short IDs
             if re.fullmatch(r"(AGB-)?[A-Z0-9]{4}", val):
                 data["game_id"] = val
                 data["gameid_source"] = "gameid.py"
+                continue
+
+            # Accept Sega IDs (raw, normalize later)
+            if re.search(r"\b(T|MK|HDR)[\s\-_.]?\d{3,7}", val):
+                data["game_id"] = val
+                data["gameid_source"] = "gameid.py"
+                continue
+
             continue
 
+        # --------------------------------------------------
         # Manufacturer code (GB/GBC only, 4 chars)
+        # --------------------------------------------------
         if lower.startswith("manufacturer_code"):
-            parts = line.split(None, 1)  # split on ANY whitespace
+            parts = line.split(None, 1)
             if len(parts) == 2:
-                val = parts[1].strip()
+                val = parts[1].strip().upper()
                 if re.fullmatch(r"[A-Z0-9]{4}", val):
                     data["game_id"] = val
                     data["gameid_source"] = "gameid.py"
             continue
 
+        # --------------------------------------------------
         # Title
+        # --------------------------------------------------
         if lower.startswith("title"):
             val = line.split(None, 1)[1].strip()
             if val:
@@ -628,7 +406,9 @@ def parse_gameid_output(text):
                 data["title_source"] = "gameid.py"
             continue
 
+        # --------------------------------------------------
         # CRC32
+        # --------------------------------------------------
         if lower.startswith("crc32"):
             val = line.split(None, 1)[1].strip()
             if re.fullmatch(r"[0-9a-fA-F]{8}", val):
@@ -641,59 +421,19 @@ def parse_gameid_output(text):
 # =========================== ARCADE =========================
 # ============================================================
 
-def scan_arcade():
-    SYSTEM = "ARCADE"
-    out = []
-
-    if not os.path.isdir(ARC_DIR):
-        return out
-
-    for filename in sorted(os.listdir(ARC_DIR)):
-        if not filename.lower().endswith((".zip", ".7z")):
-            continue
-
-        path = os.path.join(ARC_DIR, filename)
-        name = os.path.splitext(filename)[0]
-
-        game_id = None
-        gameid_title = None
-        gameid_source = None
-
-        # ==================================================
-        # 1) Filename fast scan
-        # ==================================================
-        # Game & Watch titles have no internal IDs
-        game_id = name
-        gameid_source = "filename"
-
-        # ==================================================
-        # 4) CRC fallback
-        # ==================================================
-        if not game_id:
-            game_id = crc32_file(path)
-            gameid_source = "crc"
-
-        out.append((
-            "FBNeo - Arcade Games",
-            gameid_title,
-            game_id,
-            gameid_source,
-            filename
-        ))
-
-    return out
+# No scanner
 
 # ============================================================
 # ======================= GAME & WATCH =======================
 # ============================================================
 
-def gw_alias_to_id(name):
+def scan_gamewatch(path):
     """
     Match filename alias (e.g. gnw_egg) to Game & Watch DB ID.
-    Returns ID or None.
+    Returns the DB key (Game ID), not the alias.
     """
     section = DB.get("Handheld Electronic Game", {})
-    name = name.lower()
+    name = os.path.splitext(os.path.basename(path))[0].lower()
 
     for gid, value in section.items():
         # value: "gnw_egg | Egg"
@@ -703,63 +443,12 @@ def gw_alias_to_id(name):
 
     return None
 
-def scan_gamewatch():
-    SYSTEM = "GW"
-    out = []
-
-    if not os.path.isdir(NGW_DIR):
-        return out
-
-    for filename in sorted(os.listdir(NGW_DIR)):
-        if not filename.lower().endswith((".zip", ".7z")):
-            continue
-
-        path = os.path.join(NGW_DIR, filename)
-        name = os.path.splitext(filename)[0]
-
-        game_id = None
-        gameid_title = None
-        gameid_source = None
-
-        # ==================================================
-        # 1) Filename fast scan
-        # ==================================================
-        m = FILENAME_ID_RE[SYSTEM].search(filename)
-        if m and m.group(1).isupper():
-            game_id = m.group(1)
-            gameid_source = "filename"
-
-        # ==================================================
-        # 2) Check database
-        # ==================================================
-        if not game_id:
-            gid = gw_alias_to_id(name)
-            if gid:
-                game_id = gid
-                gameid_source = "database"
-
-        # ==================================================
-        # 4) CRC fallback
-        # ==================================================
-        if not game_id:
-            game_id = crc32_file(path)
-            gameid_source = "crc"
-
-        out.append((
-            "Handheld Electronic Game",
-            gameid_title,
-            game_id,
-            gameid_source,
-            filename
-        ))
-
-    return out
 
 # ============================================================
 # ==================== NINTENDO GAME BOY =====================
 # ============================================================
 
-def gbc_header_scan(path):
+def scan_gb(path):
     try:
         with open(path, "rb") as f:
             f.seek(0x013F)
@@ -786,83 +475,11 @@ def gbc_header_scan(path):
     except Exception:
         return None
 
-
-def scan_gb():
-    SYSTEM = "GBC"
-    out = []
-
-    if not os.path.isdir(GBC_DIR):
-        return out
-
-    for path in find_games(GBC_DIR, (".gb", ".gbc")):
-        filename = os.path.basename(path)
-
-        game_id = None
-        gameid_title = None
-        gameid_source = None
-        crc_gameid = None
-
-        if not SKIP_SCAN:
-            # ==================================================
-            # 1) Filename fast scan
-            # ==================================================
-            m = FILENAME_ID_RE[SYSTEM].search(filename)
-            if m and m.group(1).isupper():
-                game_id = m.group(1)
-                gameid_source = "filename"
-
-            # ==================================================
-            # 2) ROM header scan (GBC only)
-            # ==================================================
-            if not game_id and path.lower().endswith((".gb", ".gbc")):
-                gid = gbc_header_scan(path)
-                if gid:
-                    game_id = gid
-                    gameid_source = "rom_header"
-
-        # ==================================================
-        # 3) GameID.py
-        # ==================================================
-        if not game_id and path.lower().endswith(SUPPORTED_GAMEID_EXTS):
-            gid2, gid2_src, title2, title2_src, crc_gameid = (
-                get_gameid_and_title_from_gameid_py(path, SYSTEM)
-            )
-
-            # Accept GameID from serial / manufacturer_code
-            if gid2:
-                game_id = gid2
-                gameid_source = gid2_src
-
-            # Accept title only if not ALL CAPS
-            if title2 and not title2.isupper():
-                gameid_title = clean_title(title2)
-
-        # ==================================================
-        # 4) CRC fallback
-        # ==================================================
-        if not game_id:
-            if crc_gameid:
-                game_id = crc_gameid.lower()
-                gameid_source = "gameid.py"
-            else:
-                game_id = crc32_file(path)
-                gameid_source = "crc"
-
-        out.append((
-            "Nintendo - Game Boy",
-            gameid_title,
-            game_id,
-            gameid_source,
-            filename
-        ))
-
-    return out
-
 # ============================================================
 # ================ NINTENDO GAME BOY ADVANCE =================
 # ============================================================
 
-def gba_header_scan(path):
+def scan_gba(path):
     try:
         with open(path, "rb") as f:
             f.seek(0x00AC)
@@ -871,93 +488,20 @@ def gba_header_scan(path):
         if len(raw) != 4:
             return None
 
-        # Must be 4 uppercase alnum ASCII
         if not re.fullmatch(rb"[A-Z0-9]{4}", raw):
             return None
 
-        return raw.decode("ascii")
+        gid = raw.decode("ascii")
+        return f"AGB-{gid}"
 
     except Exception:
         return None
-
-def scan_gba():
-    SYSTEM = "GBA"
-    out = []
-
-    if not os.path.isdir(GBA_DIR):
-        return out
-
-    for path in find_games(GBA_DIR, (".gba",)):
-        filename = os.path.basename(path)
-
-        game_id = None
-        gameid_title = None
-        gameid_source = None
-        crc_gameid = None
-
-        if not SKIP_SCAN:
-            # ==================================================
-            # 1) Filename fast scan
-            # ==================================================
-            m = FILENAME_ID_RE[SYSTEM].search(filename)
-            if m and m.group(1).isupper():
-                game_id = m.group(1)
-                gameid_source = "filename"
-
-            # ==================================================
-            # 2) ROM header scan
-            # ==================================================
-            if not game_id:
-                gid = gba_header_scan(path)
-                if gid:
-                    game_id = f"AGB-{gid}"
-                    gameid_source = "rom_header"
-
-        # ==================================================
-        # 3) GameID.py (ID + title + crc)
-        # ==================================================
-        if not game_id and path.lower().endswith(SUPPORTED_GAMEID_EXTS):
-            gid2, gid2_src, title2, title2_src, crc_gameid = (
-                get_gameid_and_title_from_gameid_py(path, SYSTEM)
-            )
-
-            # Accept GameID.py ID (serial or ID)
-            if gid2:
-                game_id = gid2
-                if not game_id.startswith("AGB-"):
-                    game_id = f"AGB-{game_id}"
-                gameid_source = gid2_src
-
-
-            if title2 and not title2.isupper():
-                gameid_title = clean_title(title2)
-
-        # ==================================================
-        # 4) CRC fallback
-        # ==================================================
-        if not game_id:
-            if crc_gameid:
-                game_id = crc_gameid.lower()
-                gameid_source = "gameid.py"
-            else:
-                game_id = crc32_file(path)
-                gameid_source = "crc"
-
-        out.append((
-            "Nintendo - Game Boy Advance",
-            gameid_title,
-            game_id,
-            gameid_source,
-            filename
-        ))
-
-    return out
 
 # ============================================================
 # ======================= NINTENDO DS ========================
 # ============================================================
 
-def nds_header_scan(path):
+def scan_ds(path):
     try:
         with open(path, "rb") as f:
             f.seek(0x000C)
@@ -966,81 +510,53 @@ def nds_header_scan(path):
         if len(raw) != 4:
             return None
 
+        gid = raw.decode("ascii", "ignore").upper()
+
         # Must be 4 uppercase alphanumeric ASCII
-        if not re.fullmatch(rb"[A-Z0-9]{4}", raw):
+        if not re.fullmatch(r"[A-Z0-9]{4}", gid):
             return None
 
-        return raw.decode("ascii")
+        if path.lower().endswith(".dsi"):
+            return f"TWL-{gid}"
+        else:
+            return f"NTR-{gid}"
 
     except Exception:
         return None
-
-def scan_ds():
-    SYSTEM = "NDS"
-    out = []
-
-    if not os.path.isdir(NDS_DIR):
-        return out
-
-    for path in find_games(NDS_DIR, (".nds",)):
-        filename = os.path.basename(path)
-
-        game_id = None
-        gameid_title = None
-        gameid_source = None
-        crc_gameid = None
-
-        if not SKIP_SCAN:
-            # ==================================================
-            # 1) Filename fast scan
-            # ==================================================
-            m = FILENAME_ID_RE[SYSTEM].search(filename)
-            if m and m.group(1).isupper():
-                game_id = m.group(1)
-                gameid_source = "filename"
-
-            # ==================================================
-            # 2) ROM header scan
-            # ==================================================
-            if not game_id:
-                gid = nds_header_scan(path)
-                if gid:
-                    if path.lower().endswith(".dsi"):
-                        game_id = f"TWL-{gid}"
-                    else:
-                        game_id = f"NTR-{gid}"
-                    gameid_source = "rom_header"
-
-        # ==================================================
-        # 3) GameID.py (Nintendo DS has no support → skipped)
-        # ==================================================
-
-        # ==================================================
-        # 4) CRC fallback
-        # ==================================================
-        if not game_id:
-            if crc_gameid:
-                game_id = crc_gameid.lower()
-                gameid_source = "gameid.py"
-            else:
-                game_id = crc32_file(path)
-                gameid_source = "crc"
-
-        out.append((
-            "Nintendo - Nintendo DS",
-            gameid_title,
-            game_id,
-            gameid_source,
-            filename
-        ))
-
-    return out
 
 # ============================================================
 # ======================= NINTENDO 3DS =======================
 # ============================================================
 
-def ctr_header_scan(path):
+def load_3ds_serial_database(path="3dsserialdatabase.txt"):
+    db = {}
+
+    if not os.path.exists(path):
+        return db
+
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+
+            k, v = line.split("=", 1)
+            k = k.strip().upper()
+            v = v.strip().upper()
+
+            if re.fullmatch(r"[0-9A-F]{16}", k) and re.fullmatch(r"(CTR|KTR|BBB)-[A-Z0-9]{4}", v):
+                db[k] = v
+
+    return db
+THREEDS_SERIAL_DB = load_3ds_serial_database()
+
+def scan_3ds(path):
+    """
+    Read NCSD/NCCH Title ID at 0x108, convert to DB key format and return the mapped serial.
+    Returns the serial (e.g. CTR-XXXX) when found, otherwise None to allow CRC fallback.
+    """
     try:
         with open(path, "rb") as f:
             f.seek(0x108)
@@ -1053,250 +569,43 @@ def ctr_header_scan(path):
         if raw == b"\x00" * 8:
             return None
 
-        # NCSD Title ID is little-endian in file → convert to big-endian
-        return raw[::-1].hex().upper()
+        # EXACT legacy behavior: uppercase hex (DB keys are uppercased)
+        title_id = raw[::-1].hex().upper()
+
+        # Use the module-level cache
+        serial = THREEDS_SERIAL_DB.get(title_id)
+        if serial:
+            return serial
+
+        # No mapping found -> return None so the pipeline can fall back to CRC
+        return None
 
     except Exception:
         return None
-
-def scan_3ds():
-    SYSTEM = "3DS"
-    out = []
-
-    serial_db = load_3ds_serial_database()
-
-    if not os.path.isdir(N3DS_DIR):
-        return out
-
-    for path in find_games(N3DS_DIR, (".3ds", ".cci")):
-        filename = os.path.basename(path)
-
-        game_id = None
-        gameid_title = None
-        gameid_source = None
-        crc_gameid = None
-
-        if not SKIP_SCAN:
-            # ==================================================
-            # 1) Filename fast scan (rarely useful)
-            # ==================================================
-            m = FILENAME_ID_RE[SYSTEM].search(filename)
-            if m and m.group(1).isupper():
-                game_id = m.group(1)
-                gameid_source = "filename"
-
-            # ==================================================
-            # 2) ROM header scan (NCSD Title ID → serial DB)
-            # ==================================================
-            if not game_id:
-                title_id = ctr_header_scan(path)
-                if title_id:
-                    game_id = serial_db.get(title_id, title_id)
-                    gameid_source = "rom_header"
-
-        # ==================================================
-        # 3) GameID.py (Nintendo 3DS unsupported → skipped)
-        # ==================================================
-
-        # ==================================================
-        # 4) CRC fallback
-        # ==================================================
-        if not game_id:
-            game_id = crc32_file(path)
-            gameid_source = "crc"
-
-        out.append((
-            "Nintendo - Nintendo 3DS",
-            gameid_title,
-            game_id,
-            gameid_source,
-            filename
-        ))
-
-    return out
 
 # ============================================================
 # ============================ NES ===========================
 # ============================================================
 
-def scan_nes():
-    SYSTEM = "NES"
-    out = []
-
-    if not os.path.isdir(NES_DIR):
-        return out
-
-    for path in find_games(NES_DIR, (".nes",)):
-        filename = os.path.basename(path)
-
-        game_id = None
-        gameid_title = None
-        gameid_source = None
-        crc_gameid = None
-
-        if not SKIP_SCAN:
-            # ==================================================
-            # 1) Filename fast scan (low confidence)
-            # ==================================================
-            m = FILENAME_ID_RE[SYSTEM].search(filename)
-            if m and m.group(1).isupper():
-                game_id = m.group(1)
-                gameid_source = "filename"
-
-            # ==================================================
-            # 2) ROM header scan (NES header to unreliable read)
-            # ==================================================
-
-        # ==================================================
-        # 3) GameID.py
-        # ==================================================
-        if path.lower().endswith(SUPPORTED_GAMEID_EXTS):
-            gid2, gid2_src, title2, title2_src, crc_gameid = (
-                get_gameid_and_title_from_gameid_py(path, SYSTEM)
-            )
-
-            if title2 and not title2.isupper():
-                gameid_title = clean_title(title2)
-
-        # ==================================================
-        # 4) CRC fallback
-        # ==================================================
-        if not game_id:
-            if crc_gameid:
-                game_id = crc_gameid.lower()
-                gameid_source = "gameid.py"
-            else:
-                game_id = crc32_file(path)
-                gameid_source = "crc"
-
-        out.append((
-            "Nintendo - Nintendo Entertainment System",
-            gameid_title,
-            game_id,
-            gameid_source,
-            filename
-        ))
-
-    return out
+# No scanner
 
 # ============================================================
 # ============================ SNES ==========================
 # ============================================================
 
-def scan_snes():
-    SYSTEM = "SNES"
-    out = []
-
-    if not os.path.isdir(SNES_DIR):
-        return out
-
-    for path in find_games(SNES_DIR, (".sfc", ".smc")):
-        filename = os.path.basename(path)
-
-        game_id = None
-        gameid_title = None
-        gameid_source = None
-        crc_gameid = None
-
-        if not SKIP_SCAN:
-            # ==================================================
-            # 1) Filename fast scan
-            # ==================================================
-            m = FILENAME_ID_RE[SYSTEM].search(filename)
-            if m and m.group(1).isupper():
-                game_id = m.group(1)
-                gameid_source = "filename"
-
-        # ==================================================
-        # 3) GameID.py
-        # ==================================================
-        if path.lower().endswith(SUPPORTED_GAMEID_EXTS):
-            gid2, gid2_src, title2, title2_src, crc_gameid = (
-                get_gameid_and_title_from_gameid_py(path, SYSTEM)
-            )
-
-            # SNES: trust title, not GameID
-            if title2 and not title2.isupper():
-                gameid_title = clean_title(title2)
-
-        # ==================================================
-        # 4) CRC fallback
-        # ==================================================
-        if not game_id:
-            if crc_gameid:
-                game_id = crc_gameid.lower()
-                gameid_source = "gameid.py"
-            else:
-                game_id = crc32_file(path)
-                gameid_source = "crc"
-
-        out.append((
-            "Nintendo - Super Nintendo Entertainment System",
-            gameid_title,
-            game_id,
-            gameid_source,
-            filename
-        ))
-
-    return out
+# No scanner
 
 # ============================================================
 # ===================== VIRTUAL BOY ==========================
 # ============================================================
 
-def scan_virtualboy():
-    SYSTEM = "VB"
-    out = []
-
-    if not os.path.isdir(NVB_DIR):
-        return out
-
-    for path in find_games(NVB_DIR, (".vb", ".vboy", ".bin")):
-        filename = os.path.basename(path)
-
-        game_id = None
-        gameid_title = None
-        gameid_source = None
-        crc_gameid = None
-
-        if not SKIP_SCAN:
-            # ==================================================
-            # 1) Filename fast scan
-            # ==================================================
-            # Uppercase-only, must contain at least one digit
-            m = FILENAME_ID_RE[SYSTEM].search(filename)
-            if m and m.group(1).isupper() and any(c.isdigit() for c in m.group(1)):
-                game_id = m.group(1)
-                gameid_source = "filename"
-
-            # ==================================================
-            # 2) ROM header scan (Virtual Boy has no header to read)
-        # ==================================================
-        # 3) GameID.py (Virtual Boy has no support → skipped)
-        # ==================================================
-
-        # ==================================================
-        # 4) CRC fallback
-        # ==================================================
-        if not game_id:
-            game_id = crc32_file(path)
-            gameid_source = "crc"
-
-        out.append((
-            "Nintendo - Virtual Boy",
-            gameid_title,
-            game_id,
-            gameid_source,
-            filename
-        ))
-
-    return out
+# No scanner
 
 # ============================================================
 # ===================== NINTENDO 64 ==========================
 # ============================================================
 
-def n64_header_scan(path):
+def scan_n64(path):
     try:
         with open(path, "rb") as f:
             data = f.read(256)
@@ -1354,72 +663,6 @@ def n64_header_scan(path):
         pass
 
     return None
-
-def scan_n64():
-    SYSTEM = "N64"
-    out = []
-
-    if not os.path.isdir(N64_DIR):
-        return out
-
-    for path in find_games(N64_DIR, (".z64", ".n64", ".v64", ".rom", ".bin")):
-        filename = os.path.basename(path)
-
-        game_id = None
-        gameid_title = None
-        gameid_source = None
-        crc_gameid = None
-
-        if not SKIP_SCAN:
-            # ==================================================
-            # 1) Filename fast scan
-            # ==================================================
-            m = FILENAME_ID_RE[SYSTEM].search(filename)
-            if m:
-                game_id = m.group(1).upper()
-                gameid_source = "filename"
-
-            # ==================================================
-            # 2) ROM header product code
-            # ==================================================
-            if not game_id:
-                gid = n64_header_scan(path)
-                if gid:
-                    game_id = gid
-                    gameid_source = "rom_header"
-
-        # ==================================================
-        # 3) GameID.py
-        # ==================================================
-        if not game_id and path.lower().endswith(SUPPORTED_GAMEID_EXTS):
-            gid2, gid2_src, title2, title2_src, crc_gameid = get_gameid_and_title_from_gameid_py(path, SYSTEM)
-            if gid2:
-                game_id = gid2
-                gameid_source = gid2_src
-
-            if title2 and not title2.isupper():
-                gameid_title = clean_title(title2)
-
-        # ==================================================
-        # 4) CRC fallback
-        # ==================================================
-        if not game_id:
-            if crc_gameid:
-                game_id = crc_gameid.lower()
-                gameid_source = "gameid.py"
-            else:
-                game_id = crc32_file(path)
-                gameid_source = "crc"
-
-        out.append((
-            "Nintendo - Nintendo 64",
-            gameid_title,
-            game_id,
-            gameid_source,
-            filename
-        ))
-
-    return out
 
 # ============================================================
 # ===================== DOLPHIN HELPER =======================
@@ -1484,113 +727,35 @@ def run_dolphin_tool(path):
 # ==================== NINTENDO GAMECUBE =====================
 # ============================================================
 
-def gamecube_container_scan(path):
+def scan_gamecube(path):
     try:
         ext = os.path.splitext(path)[1].lower()
 
         if ext not in (".iso", ".gcm"):
-            return None, None
+            return None
 
         with open(path, "rb") as f:
             f.seek(0x0000)
             header = f.read(0x40)
 
         if len(header) < 0x40:
-            return None, None
+            return None
 
         raw_id = header[0x00:0x06].decode("ascii", "ignore").strip()
 
         if len(raw_id) != 6 or not raw_id.isalnum():
-            return None, None
+            return None
 
-        return raw_id.upper(), "disc_header"
+        return raw_id.upper()
 
     except Exception:
-        return None, None
-    
-def scan_gamecube():
-    SYSTEM = "GC"
-    out = []
-
-    if not os.path.isdir(NGC_DIR):
-        return out
-
-    for path in find_games(NGC_DIR, (".iso", ".gcm", ".rvz")):
-        filename = os.path.basename(path)
-
-        game_id = None
-        gameid_source = None
-        gameid_title = None
-        crc_gameid = None
-
-        if not SKIP_SCAN:
-            # ==================================================
-            # 1) Filename fast scan
-            # ==================================================
-            m = FILENAME_ID_RE[SYSTEM].search(filename)
-            if m:
-                game_id = m.group(1)
-                gameid_source = "filename"
-
-            # ==================================================
-            # 2) Disc container scan
-            # ==================================================
-            if not game_id and path.lower().endswith((".iso", ".gcm")):
-                gid, src = gamecube_container_scan(path)
-                if gid:
-                    game_id = gid
-                    gameid_source = src
-
-            # ==================================================
-            # 2.1) Dolphin Tool
-            # ==================================================
-            if not game_id:
-                gid_d, gid_d_src, title_d, title_d_src = run_dolphin_tool(path)
-
-                if gid_d:
-                    game_id = gid_d.upper()
-                    gameid_source = gid_d_src
-
-                if title_d and not title_d.isupper():
-                    gameid_title = title_d
-
-        # ==================================================
-        # 3) GameID.py
-        # ==================================================
-        if not game_id and path.lower().endswith(SUPPORTED_GAMEID_EXTS):
-            gid2, gid2_src, title2, title2_src, crc_gameid = get_gameid_and_title_from_gameid_py(path, SYSTEM)
-            if gid2:
-                game_id = gid2
-                gameid_source = gid2_src
-            if title2 and not title2.isupper():
-                gameid_title = clean_title(title2)
-
-        # ==================================================
-        # 4) CRC fallback
-        # ==================================================
-        if not game_id:
-            if crc_gameid:
-                game_id = crc_gameid.lower()
-                gameid_source = "gameid.py"
-            else:
-                game_id = crc32_file(path)
-                gameid_source = "crc"
-
-        out.append((
-            "Nintendo - GameCube",
-            gameid_title,
-            game_id,
-            gameid_source,
-            filename
-        ))
-
-    return out
+        return None
 
 # ============================================================
 # ====================== NINTENDO WII ========================
 # ============================================================
       
-def wii_container_scan(path):
+def scan_wii(path):
     try:
         ext = os.path.splitext(path)[1].lower()
 
@@ -1599,104 +764,25 @@ def wii_container_scan(path):
         elif ext == ".wbfs":
             header_offset = 0x0200
         else:
-            return None, None
+            return None
 
         with open(path, "rb") as f:
             f.seek(header_offset)
             header = f.read(0x100)
 
         if len(header) < 0x100:
-            return None, None
+            return None
 
         raw_id = header[0x00:0x06].decode("ascii", "ignore").strip()
 
         # Wii GameID sanity check
         if len(raw_id) != 6 or not raw_id.isalnum():
-            return None, None
+            return None
 
-        return raw_id.upper(), "rom_header"
+        return raw_id.upper()
 
     except Exception:
-        return None, None
-
-
-def scan_wii():
-    SYSTEM = "WII"
-    out = []
-
-    if not os.path.isdir(WII_DIR):
-        return out
-
-    for path in find_games(WII_DIR, (".iso", ".wbfs", ".rvz")):
-        filename = os.path.basename(path)
-
-        game_id = None
-        gameid_source = None
-        gameid_title = None
-        crc_gameid = None
-
-        if not SKIP_SCAN:
-            # ==================================================
-            # 1) Filename fast scan
-            # ==================================================
-            m = FILENAME_ID_RE[SYSTEM].search(filename)
-            if m:
-                game_id = m.group(1)
-                gameid_source = "filename"
-
-            # ==================================================
-            # 2) Disc container scan
-            # ==================================================
-            if not game_id and path.lower().endswith((".iso", ".wbfs")):
-                gid, src = wii_container_scan(path)
-                if gid:
-                    game_id = gid
-                    gameid_source = "disc_header"
-
-            # ==================================================
-            # 2.1) Dolphin Tool
-            # ==================================================
-            if not game_id:
-                gid_d, gid_d_src, title_d, title_d_src = run_dolphin_tool(path)
-
-                if gid_d:
-                    game_id = gid_d.upper()
-                    gameid_source = gid_d_src
-
-                if title_d and not title_d.isupper():
-                    gameid_title = title_d
-
-        # ==================================================
-        # 3) GameID.py
-        # ==================================================
-        if not game_id and path.lower().endswith(SUPPORTED_GAMEID_EXTS):
-            gid2, gid2_src, title2, title2_src, crc_gameid = get_gameid_and_title_from_gameid_py(path, "GC")
-            if gid2:
-                game_id = gid2
-                gameid_source = gid2_src
-            if title2 and not title2.isupper():
-                gameid_title = clean_title(title2)
-
-        # ==================================================
-        # 4) CRC fallback
-        # ==================================================
-        if not game_id:
-            if crc_gameid:
-                game_id = crc_gameid.lower()
-                gameid_source = "gameid.py"
-            else:
-                game_id = crc32_file(path)
-                gameid_source = "crc"
-
-        out.append((
-            "Nintendo - Wii",
-            gameid_title,
-            game_id,
-            gameid_source,
-            filename
-        ))
-
-    return out
+        return None
 
 # ============================================================
 # ====================== SEGA HELPERS ========================
@@ -1706,10 +792,26 @@ def normalize_sega_id(gid):
     if not gid:
         return None
 
-    g = gid.upper().replace("_", "-").replace(".", "")
+    g = gid.upper().strip()
+
+    # ------------------------------------------
+    # Strip Sega CD / Genesis header prefixes
+    # Example: "GM T-93265-00"
+    # ------------------------------------------
+    g = re.sub(r"^GM\s+", "", g)
+
+    # ------------------------------------------
+    # Remove revision suffixes (-00, -01, etc)
+    # ------------------------------------------
+    g = re.sub(r"-\d{2}$", "", g)
+
+    # ------------------------------------------
+    # Canonical formatting
+    # ------------------------------------------
+    g = g.replace("_", "-").replace(".", "")
 
     # Txxxx[x] or Txxxxx[x] → T-xxxx[x] / T-xxxxx[x]
-    g = re.sub(r"^(T)(\d{4,5}[A-Z]?)$", r"\1-\2", g)
+    g = re.sub(r"^(T)(\d{4,7}[A-Z]?)$", r"\1-\2", g)
 
     # MKxxxxx → MK-xxxxx
     g = re.sub(r"^(MK)(\d+)$", r"\1-\2", g)
@@ -1718,7 +820,6 @@ def normalize_sega_id(gid):
     g = re.sub(r"^(HDR)(\d+)$", r"\1-\2", g)
 
     return g
-
 
 # ============================================================
 # ======================= MEGA DRIVE =========================
@@ -1791,7 +892,7 @@ def megadrive_header_scan(path):
         # 🔑 Strip leading "0000" only
         text = re.sub(r"^0000", "", text)
         
-        m = FILENAME_ID_RE[SYSTEM].search(text)
+        m = GAMEID_RE[SYSTEM].search(text)
         if m:
             gid = m.group(1).upper()
 
@@ -1802,87 +903,101 @@ def megadrive_header_scan(path):
 
     return None
 
-def scan_megadrive():
-    SYSTEM = "Genesis"
-    out = []
+def scan_megadrive(path):
+    try:
+        if path.lower().endswith(".smd"):
+            gid = megadrive_smd_scan(path)
+        else:
+            gid = megadrive_header_scan(path)
 
-    if not os.path.isdir(SMD_DIR):
-        return out
+        if gid:
+            return normalize_sega_id(gid)
 
-    for path in find_games(SMD_DIR, (".md", ".bin", ".smd", ".gen")):
-        filename = os.path.basename(path)
+    except Exception:
+        pass
 
-        game_id = None
-        gameid_title = None
-        gameid_source = None
-        crc_gameid = None
+    return None
 
-        if not SKIP_SCAN:
-            # ==================================================
-            # 1) Filename fast scan
-            # ==================================================
-            m = FILENAME_ID_RE[SYSTEM].search(filename)
-            if m:
-                cand = m.group(1).upper()
-                if not re.fullmatch(r"\d{7,8}", cand):
-                    game_id = cand
-                    gameid_source = "filename"
+# ============================================================
+# ========================= SEGA CD ==========================
+# ============================================================
 
-            # ==================================================
-            # 2) ROM header product code
-            # ==================================================
-            if not game_id:
-                if path.lower().endswith(".smd"):
-                    gid = megadrive_smd_scan(path)
-                    if gid:
-                        game_id = normalize_sega_id(gid)
-                        gameid_source = "rom_header"
-                else:
-                    gid = megadrive_header_scan(path)
-                    if gid:
-                        game_id = normalize_sega_id(gid)
-                        gameid_source = "rom_header"
+def scan_segacd(path):
+    """
+    Sega CD / Mega-CD scanner.
+    Reads the IP (boot) header in sector 0 and extracts the product code.
+    """
+    try:
+        ext = os.path.splitext(path)[1].lower()
+        data_path = path
+        sector = None
+        offset = None
 
-        # ==================================================
-        # 3) GameID.py
-        # ==================================================
-        if not game_id and path.lower().endswith(SUPPORTED_GAMEID_EXTS):
-            gid2, gid2_src, title2, title2_src, crc_gameid = get_gameid_and_title_from_gameid_py(path, SYSTEM)
-            if gid2:
-                game_id = gid2
-                gameid_source = "gameid.py"
+        # ---------------------------------
+        # CUE → Track 01 BIN + sector mode
+        # ---------------------------------
+        if ext == ".cue":
+            bin_path = None
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    if line.upper().startswith("FILE"):
+                        parts = line.split('"')
+                        if len(parts) >= 2:
+                            bin_path = os.path.join(
+                                os.path.dirname(path),
+                                parts[1]
+                            )
+                            break
 
-            if title2 and not title2.isupper():
-                gameid_title = clean_title(title2)
+            if not bin_path or not os.path.exists(bin_path):
+                return None
 
-        # ==================================================
-        # 4) CRC fallback
-        # ==================================================
-        if not game_id:
-            if crc_gameid:
-                game_id = crc_gameid.lower()
-                gameid_source = "gameid.py"
-            else:
-                game_id = crc32_file(path)
-                gameid_source = "crc"
+            sector, offset = detect_sector_mode(path)
+            data_path = bin_path
+            ext = ".bin"
 
-        out.append((
-            "Sega - Mega Drive",
-            gameid_title,
-            game_id,
-            gameid_source,
-            filename
-        ))
+        # ---------------------------------
+        # BIN-only not supported (by design)
+        # ---------------------------------
+        if ext != ".bin" or sector is None:
+            return None
 
-    return out
-    
+        # ---------------------------------
+        # Read IP header (sector 0)
+        # ---------------------------------
+        with open(data_path, "rb") as f:
+            f.seek(offset)
+            raw = f.read(2048)
+
+        if len(raw) < 256:
+            return None
+
+        text = raw.decode("ascii", "ignore").upper()
+        text = "".join(c for c in text if 32 <= ord(c) < 127)
+
+        # ---------------------------------
+        # Extract Sega CD product code
+        # Example: "GM T-93265-00"
+        # ---------------------------------
+        m = re.search(
+            r"GM\s+(T[\s\-]?\d{4,7}[A-Z]?|MK[\s\-]?\d+|HDR[\s\-]?\d+)",
+            text
+        )
+        if not m:
+            return None
+
+        return normalize_sega_id(m.group(1))
+
+    except Exception:
+        return None
+
 # ============================================================
 # ========================= SATURN ===========================
 # ============================================================
 
 SATURN_SCAN_LIMIT = 512 * 1024  # 512 KB (IP.BIN is very early)
 
-def saturn_ip_bin_scan(path):
+def scan_saturn(path):
     SYSTEM = "Saturn"
     try:
         data_path = path
@@ -1912,86 +1027,11 @@ def saturn_ip_bin_scan(path):
 
     return None
 
-def scan_saturn():
-    SYSTEM = "Saturn"
-    out = []
-
-    if not os.path.isdir(SSA_DIR):
-        return out
-
-    for path in find_games(SSA_DIR, (".cue", ".iso", ".chd")):
-        filename = os.path.basename(path)
-
-        game_id = None
-        gameid_title = None
-        gameid_source = None
-        crc_gameid = None
-
-        if not SKIP_SCAN:
-            # ==================================================
-            # 1) Filename fast scan
-            # ==================================================
-            m = FILENAME_ID_RE[SYSTEM].search(filename)
-            if m:
-                game_id = m.group(1)
-                gameid_source = "filename"
-
-            # ==================================================
-            # CHD → CRC
-            # ==================================================
-            if filename.lower().endswith(".chd"):
-                if not game_id:
-                    game_id = crc32_file(path)
-                    gameid_source = "crc"
-
-            else:
-                # ==================================================
-                # 2) IP.BIN fast scan (ISO / BIN)
-                # ==================================================
-                if not game_id:
-                    gid = saturn_ip_bin_scan(path)
-                    if gid:
-                        game_id = normalize_sega_id(gid)
-                        gameid_source = "ip.bin"
-
-        # ==================================================
-        # 3) GameID.py
-        # ==================================================
-        if not game_id and path.lower().endswith(SUPPORTED_GAMEID_EXTS):
-            gid2, gid2_src, title2, title2_src, crc_gameid = get_gameid_and_title_from_gameid_py(path, SYSTEM)
-            if gid2:
-                game_id = gid2
-                gameid_source = "gameid.py"
-
-            if title2 and not title2.isupper():
-                gameid_title = clean_title(title2)
-
-        # ==================================================
-        # 4) CRC fallback
-        # ==================================================
-        if not game_id:
-            if crc_gameid:
-                game_id = crc_gameid.lower()
-                gameid_source = "gameid.py"
-            else:
-                game_id = crc32_file(path)
-                gameid_source = "crc"
-                
-        out.append((
-            "Sega - Saturn",
-            gameid_title,
-            game_id,
-            gameid_source,
-            filename
-        ))
-
-    return out
-
 # ============================================================
 # ======================= DREAMCAST ==========================
 # ============================================================
 
-def dc_scan_tracks(path):
+def scan_dreamcast(path):
     try:
         ext = os.path.splitext(path)[1].lower()
         base = os.path.dirname(path)
@@ -2057,68 +1097,6 @@ def dc_scan_tracks(path):
 
     return None
 
-def scan_dreamcast():
-    SYSTEM = "Dreamcast"
-    out = []
-
-    if not os.path.isdir(SDC_DIR):
-        return out
-
-    for path in find_games(SDC_DIR, (".gdi", ".cue", ".chd")):
-        filename = os.path.basename(path)
-
-        game_id = None
-        gameid_title = None
-        gameid_source = None
-        crc_gameid = None
-
-        if not SKIP_SCAN:
-            # ==================================================
-            # 1) Filename fast scan
-            # ==================================================
-            m = FILENAME_ID_RE[SYSTEM].search(filename)
-            if m:
-                game_id = m.group(1)
-                gameid_source = "filename"
-
-            # ==================================================
-            # CHD → CRC
-            # ==================================================
-            if filename.lower().endswith(".chd"):
-                if not game_id:
-                    game_id = crc32_file(path)
-                    gameid_source = "crc"
-            else:
-                # ==================================================
-                # 2) IP.BIN
-                # ==================================================
-                if not game_id:
-                    gid = dc_scan_tracks(path)
-                    if gid:
-                        game_id = normalize_sega_id(gid)
-                        gameid_source = "ip.bin"
-
-        # ==================================================
-        # 3) GameID.py (Dreamcast has no support → skipped)
-        # ==================================================
-
-        # ==================================================
-        # 4) CRC fallback
-        # ==================================================
-        if not game_id:
-            game_id = crc32_file(path)
-            gameid_source = "crc"
-
-        out.append((
-            "Sega - Dreamcast",
-            gameid_title,
-            game_id,
-            gameid_source,
-            filename
-        ))
-
-    return out
-
 # ============================================================
 # ====================== SONY HELPERS ========================
 # ============================================================
@@ -2135,10 +1113,10 @@ def normalize_sony_id(gid):
 # ======================= PLAYSTATION ========================
 # ============================================================
 
-PS1_SCAN_LIMIT = 64 * 1024 * 1024   # 64 MB (reduce for speed, accuracy loss under 8 MB)
-PS1_SCAN_CHUNK = 512 * 1024   # 512 kB (reduce for speed, accuracy loss under 128 kB)
+PSX_SCAN_LIMIT = 64 * 1024 * 1024   # 64 MB (reduce for speed, accuracy loss under 8 MB)
+PSX_SCAN_CHUNK = 512 * 1024   # 512 kB (reduce for speed, accuracy loss under 128 kB)
 
-def ps1_read_system_cnf(bin_path, sector, offset):
+def psx_read_system_cnf(bin_path, sector, offset):
     SYSTEM = "PSX"
     try:
         with open(bin_path, "rb") as f:
@@ -2169,117 +1147,78 @@ def ps1_read_system_cnf(bin_path, sector, offset):
     except Exception:
         return None
 
-def ps1_scan_raw(bin_path):
+def psx_scan_raw(bin_path):
     SYSTEM = "PSX"
     scanned = 0
     buf = b""
     try:
         with open(bin_path, "rb") as f:
-            while scanned < PS1_SCAN_LIMIT:
-                chunk = f.read(PS1_SCAN_CHUNK)
+            while scanned < PSX_SCAN_LIMIT:
+                chunk = f.read(PSX_SCAN_CHUNK)
                 if not chunk:
                     break
                 scanned += len(chunk)
                 buf += chunk
-                m = STRICT_ID_RE[SYSTEM].search(buf.decode("ascii", "ignore"))
+                m = GAMEID_RE[SYSTEM].search(buf.decode("ascii", "ignore"))
                 if m:
                     return m.group(1)
                 buf = buf[-1024:]
     except Exception:
         pass
     return None
-
-def scan_ps1():
+    
+def scan_psx(path):
     SYSTEM = "PSX"
-    out = []
 
-    if not os.path.isdir(PSX_DIR):
-        return out
+    try:
+        bin_path = None
+        sector, offset = 2352, 24
 
-    for path in find_games(PSX_DIR, (".cue", ".chd", ".iso")):
-        filename = os.path.basename(path)
+        # -----------------------------------------
+        # Resolve BIN (CUE-only, inline)
+        # -----------------------------------------
+        if path.lower().endswith(".cue"):
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    if "BINARY" in line.upper():
+                        bin_path = os.path.join(
+                            os.path.dirname(path),
+                            line.split('"')[1]
+                        )
+                        break
 
-        game_id = None
-        gameid_title = None
-        gameid_source = None
-        crc_gameid = None
-        
-        # CodeBreaker Overide
-        cb = re.search(r"(code[\s._-]*breaker|codebreaker|cb)[\s._-]*(?:version|ver|v)?[\s._-]*(\d+(?:\.\d+)?)", filename, re.I)
-        if cb:
-            v = cb.group(2)
-            out.append(("Sony - PlayStation", f"CodeBreaker v{v}", f"CODE-BRK{v.replace('.', '')}", "override" , filename))
-            continue
-            
-        if not SKIP_SCAN:
-            # ==================================================
-            # 1) Filename fast scan
-            # ==================================================
-            m = FILENAME_ID_RE[SYSTEM].search(filename)
-            if m and m.group(1).isupper():
-                game_id = normalize_sony_id(m.group(1))
-                gameid_source = "filename"
+            if not bin_path:
+                return None
 
-            # ==================================================
-            # CHD → CRC
-            # ==================================================
-            if filename.lower().endswith(".chd"):
-                if not game_id:
-                    game_id = crc32_file(path)
-                    gameid_source = "crc"
-            else:
-                # ==================================================
-                # 2) SYSTEM.CNF + RAW
-                # ==================================================
-                if not game_id and path.lower().endswith(".cue"):
-                    binp = resolve_bin(path)
-                    if binp:
-                        sector, offset = detect_sector_mode(path)
-                        cnf = ps1_read_system_cnf(binp, sector, offset)
-                        if cnf:
-                            m = FILENAME_ID_RE[SYSTEM].search(cnf)
-                            if m:
-                                game_id = normalize_sony_id(m.group(1))
-                                gameid_source = "system.cnf"
+            sector, offset = detect_sector_mode(path)
 
-                        if not game_id:
-                            raw = ps1_scan_raw(binp)
-                            if raw:
-                                game_id = normalize_sony_id(raw)
-                                gameid_source = "raw"
+        elif path.lower().endswith(".bin"):
+            bin_path = path
 
-        # ==================================================
-        # 3) GameID.py
-        # ==================================================
-        if not game_id and path.lower().endswith(SUPPORTED_GAMEID_EXTS):
-            gid2, gid2_src, title2, title2_src, crc_gameid = get_gameid_and_title_from_gameid_py(path, SYSTEM)
-            if gid2:
-                game_id = gid2
-                gameid_source = gid2_src
+        else:
+            return None
 
-            if title2 and not title2.isupper():
-                gameid_title = clean_title(title2)
+        # -----------------------------------------
+        # SYSTEM.CNF (authoritative)
+        # -----------------------------------------
+        cnf = psx_read_system_cnf(bin_path, sector, offset)
+        if cnf:
+            m = GAMEID_RE[SYSTEM].search(cnf)
+            if m:
+                return normalize_sony_id(m.group(1))
 
-        # ==================================================
-        # 4) CRC fallback
-        # ==================================================
-        if not game_id:
-            if crc_gameid:
-                game_id = crc_gameid.lower()
-                gameid_source = "gameid.py"
-            else:
-                game_id = crc32_file(path)
-                gameid_source = "crc"
+        # -----------------------------------------
+        # Raw fallback
+        # -----------------------------------------
+        raw = psx_scan_raw(bin_path)
+        if raw:
+            return normalize_sony_id(raw)
 
-        out.append((
-            "Sony - PlayStation",
-            gameid_title,
-            game_id,
-            gameid_source,
-            filename
-        ))
+    except Exception:
+        pass
 
-    return out
+    return None
+
 
 # ============================================================
 # ======================= PLAYSTATION 2 ======================
@@ -2287,236 +1226,538 @@ def scan_ps1():
 
 PS2_SCAN_LIMIT = 2 * 1024 * 1024   # 2 MB (reduce for speed, accuracy loss under 500 kB)
 
-def ps2_iso_scan(path):
+def scan_ps2(path):
     SYSTEM = "PS2"
     try:
         with open(path, "rb") as f:
             data = f.read(PS2_SCAN_LIMIT)
 
         text = data.decode("ascii", "ignore")
-        m = FILENAME_ID_RE[SYSTEM].search(text)
+        m = GAMEID_RE[SYSTEM].search(text)
 
         if m:
-            return m.group(1).upper()
+            return normalize_sony_id(m.group(1))
 
     except Exception:
         pass
 
     return None
 
-def scan_ps2():
-    SYSTEM = "PS2"
-    out = []
-
-    if not os.path.isdir(PS2_DIR):
-        return out
-
-    for path in find_games(PS2_DIR, (".iso", ".chd")):
-        filename = os.path.basename(path)
-
-        game_id = None
-        gameid_title = None
-        gameid_source = None
-        crc_gameid = None
-        
-        # CodeBreaker Overide
-        cb = re.search(r"(code[\s._-]*breaker|codebreaker|cb)[\s._-]*(?:version|ver|v)?[\s._-]*(\d+(?:\.\d+)?)", filename, re.I)
-        if cb:
-            v = cb.group(2)
-            out.append(("Sony - Playstation 2", f"CodeBreaker v{v}", f"CODE-BRK{v.replace('.', '')}", "override" , filename))
-            continue
- 
-        if not SKIP_SCAN:
-            # ==================================================
-            # 1) Filename fast scan
-            # ==================================================
-            m = FILENAME_ID_RE[SYSTEM].search(filename)
-            if m and m.group(1).isupper():
-                game_id = game_id = normalize_sony_id(m.group(1))
-                gameid_source = "filename"
-
-            # ==================================================
-            # CHD → CRC
-            # ==================================================
-            if filename.lower().endswith(".chd"):
-                if not game_id:
-                    game_id = crc32_file(path)
-                    gameid_source = "crc"
-            else:
-                # ==================================================
-                # 2) ISO fast scan (2 MB)
-                # ==================================================
-                if not game_id:
-                    gid = ps2_iso_scan(path)
-                    if gid:
-                        m = FILENAME_ID_RE[SYSTEM].search(gid)
-                        if m:
-                            game_id = game_id = normalize_sony_id(m.group(1))
-                            gameid_source = "iso"
-
-        # ==================================================
-        # 3) GameID.py
-        # ==================================================
-        if not game_id and path.lower().endswith(SUPPORTED_GAMEID_EXTS):
-            gid2, gid2_src, title2, title2_src, crc_gameid = get_gameid_and_title_from_gameid_py(path, SYSTEM)
-            if gid2:
-                game_id = gid2
-                gameid_source = gid2_src
-
-            if title2 and not title2.isupper():
-                gameid_title = clean_title(title2)
-
-        # ==================================================
-        # 4) CRC fallback
-        # ==================================================
-        if not game_id:
-            if crc_gameid:
-                game_id = crc_gameid.lower()
-                gameid_source = "gameid.py"
-            else:
-                game_id = crc32_file(path)
-                gameid_source = "crc"
-
-        out.append((
-            "Sony - Playstation 2",
-            gameid_title,
-            game_id,
-            gameid_source,
-            filename
-        ))
-
-    return out
-
 # ============================================================
-# ======================= PLAYSTATION PORTABLE ===============
+# ==================== PLAYSTATION PORTABLE ==================
 # ============================================================
 
 PSP_SCAN_LIMIT = 512 * 1024   # 512 kB (reduce for speed, accuracy loss under 128 kB)
 
-def psp_iso_scan(path):
+def scan_psp(path):
     SYSTEM = "PSP"
+
     try:
         with open(path, "rb") as f:
-            data = f.read(PSP_SCAN_LIMIT)
+            data = f.read(512 * 1024)
 
         text = data.decode("ascii", "ignore")
-        m = FILENAME_ID_RE[SYSTEM].search(text)
+        m = GAMEID_RE[SYSTEM].search(text)
 
         if m:
-            return m.group(1).upper()
+            gid = normalize_sony_id(m.group(1))
+            return gid
 
     except Exception:
         pass
 
     return None
 
-def scan_psp():
-    SYSTEM = "PSP"
+# ============================================================
+# ========================= SCANNER ==========================
+# ============================================================
+ 
+ENABLED_SYSTEMS = {
+    "ARCADE",
+    "GW",
+    "GBC",
+    "GBA",
+    "NDS",
+    "3DS",
+    "NES",
+    "SNES",
+    "VB",
+    "N64",
+    "GC",
+    "WII",
+    "MasterSys",
+    "GameGear",
+    "Genesis",
+    "SegaCD",
+    "32X",
+    "Saturn",
+    "Dreamcast",
+    "PSX",
+    "PS2",
+    "PSP",
+}
+
+
+    
+def scan_systems():
     out = []
 
-    if not os.path.isdir(PSP_DIR):
-        return out
+    for system_key, cfg in SYSTEMS.items():
 
-    for filename in sorted(os.listdir(PSP_DIR)):
-        if not filename.lower().endswith((".iso", ".cso", ".chd")):
+        # TEMP: restrict which systems are scanned
+        if ENABLED_SYSTEMS and system_key not in ENABLED_SYSTEMS:
             continue
 
-        path = os.path.join(PSP_DIR, filename)
+        SYSTEM = system_key
+        display = cfg["display"]
+        root = cfg["root"]
+        exts = cfg["exts"]
+        sysdb = cfg["db_sections"]
+        pat = GAMEID_RE.get(SYSTEM)
+        gameidkey = cfg["gameid"]
+        scanner = cfg.get("scanner")
 
-        game_id = None
-        gameid_title = None
-        gameid_source = None
-        crc_gameid = None
+        if not root or not os.path.isdir(root):
+            continue
 
-        if not SKIP_SCAN:
-            # ==================================================
-            # 1) Filename fast scan
-            # ==================================================
-            m = FILENAME_ID_RE[SYSTEM].search(filename)
-            if m and m.group(1).isupper():
-                game_id = game_id = normalize_sony_id(m.group(1))
-                gameid_source = "filename"
+        if not exts:
+            continue
 
-            # ==================================================
-            # CHD / CSO → filename → CRC
-            # ==================================================
-            if filename.lower().endswith((".chd", ".cso")):
+        for path in find_games(root, exts):
+            filename = os.path.basename(path)
+
+            gameid_title = None
+            title_source = None
+            game_id = None
+            gameid_source = None
+            crc_gameid = None
+            gameidpy_title = None
+            dolphintool_title = None
+            title_source = None
+            
+            base, tags = split_filename(filename)
+            filename_title = clean_title(base)
+            
+            # ==============================================
+            # 1) Override
+            # ==============================================
+            override = scan_override(filename)
+            if override:
+                override_title, override_id = override
+                gameid_title= override_title
+                game_id = override_id
+                
+                out.append((
+                    display,
+                    gameid_title,  
+                    "override",   
+                    game_id,  
+                    "override",
+                    filename
+                ))
+                continue       
+                
+            if not SKIP_SCAN:
+
+                # ==============================================
+                # 2) Filename fast scan
+                # ==============================================
                 if not game_id:
+                    m = pat.search(filename)
+                    if m:
+                        game_id = m.group(1)
+                        gameid_source = "filename"
+                    
+                # ==================================================
+                # 3) CHD / CSO → filename → CRC
+                # ==================================================
+                if filename.lower().endswith((".chd", ".cso", ".vb", ".vboy", ".gg")):
+                    gameid_title = " ".join([filename_title] + tags)
+                    game_id = crc32_file(path)
+                    
+                    out.append((
+                        display,
+                        gameid_title,
+                        "filename",
+                        game_id,
+                        "crc",
+                        filename
+                    ))
+                    continue      
+
+                # ==============================================
+                # 4) System scanner (container / header logic)
+                # ==============================================
+                if not game_id and scanner:
+                    try:
+                        gid = scanner(path)
+                        if gid:
+                            game_id = gid
+                            gameid_source = "scanner"
+                    except Exception:
+                        pass
+
+                # ==============================================
+                # 5) Dolphin Tool (GC / WII only)
+                # ==============================================
+                if not game_id and SYSTEM in ("GC", "WII"):
+                    gid_d, gid_d_src, title_d, title_d_src = run_dolphin_tool(path)
+
+                    if gid_d:
+                        game_id = gid_d.upper()
+                        gameid_source = "dolphintool"
+
+                    if title_d and not title_d.isupper():
+                        dolphintool_title = title_d
+
+            # ==============================================
+            # 6) GameID.py
+            # ==============================================
+            gameid_path = path
+
+            if path.lower().endswith(".cue"):
+                with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                    for line in f:
+                        if "BINARY" in line.upper():
+                            gameid_path = os.path.join(
+                                os.path.dirname(path),
+                                line.split('"')[1]
+                            )
+                            break
+
+            if not game_id and path.lower().endswith(SUPPORTED_GAMEID_EXTS) and gameidkey:
+                gid2, gid2_src, title2, title2_src, crc_gameid = get_gameid_and_title_from_gameid_py(gameid_path, SYSTEM, gameidkey)
+                if gid2:
+                    game_id = gid2
+                    gameid_source = "gameid.py"
+
+                if title2 and not title2.isupper():
+                    gameidpy_title = clean_title(title2)
+
+            # ==============================================
+            # 7) CRC fallback
+            # ==============================================
+            if not game_id:
+                if crc_gameid:
+                    game_id = crc_gameid.lower()
+                    gameid_source = "gameid.py"
+                else:
                     game_id = crc32_file(path)
                     gameid_source = "crc"
 
-            else:
-                # ==================================================
-                # 2) ISO fast scan (ISO only)
-                # ==================================================
-                if not game_id and filename.lower().endswith(".iso"):
-                    gid = psp_iso_scan(path)
-                    if gid:
-                        game_id = game_id = normalize_sony_id(gid)
-                        gameid_source = "iso"
+            ################################################
+            # Resolve Title
+            ################################################
 
-        # ==================================================
-        # 3) GameID.py
-        # ==================================================
-        if not game_id and path.lower().endswith(SUPPORTED_GAMEID_EXTS):
-            gid2, gid2_src, title2, title2_src, crc_gameid = get_gameid_and_title_from_gameid_py(path, SYSTEM)
-            if gid2:
-                game_id = gid2
-                gameid_source = gid2_src
+            # --------------------------------------------------
+            # 8) CODEWORD OVERRIDE → FORCE FILENAME
+            # --------------------------------------------------
+            for cw in CODEWORDS:
+                if cw.lower() in filename.lower():
+                    gameid_title = " ".join([filename_title] + tags)
+                    title_source = "filename"
 
-            if title2 and not title2.isupper():
-                gameid_title = clean_title(title2)
+            # --------------------------------------------------
+            # 9) Database
+            # --------------------------------------------------
+            if not gameid_title and not SKIP_DATABASE and game_id:
+                db_title = lookup_db_title(game_id, SYSTEM)
+                if db_title:
+                    gameid_title = " ".join([db_title] + tags)
+                    title_source = "database"
 
-        # ==================================================
-        # 4) CRC fallback
-        # ==================================================
-        if not game_id:
-            if crc_gameid:
-                game_id = crc_gameid.lower()
-                gameid_source = "gameid.py"
-            else:
-                game_id = crc32_file(path)
-                gameid_source = "crc"
+            # --------------------------------------------------
+            # 10) GameID.py (EARLY, if already run)
+            # --------------------------------------------------
+            if not gameid_title and gameidpy_title and gameid_source == "gameid.py":
+                
+                gameid_title = " ".join([gameidpy_title] + tags)
+                title_source = "gameid.py"
 
-        out.append((
-            "Sony - PlayStation Portable",
-            gameid_title,
-            game_id,
-            gameid_source,
-            filename
-        ))
+            # --------------------------------------------------
+            # 11) Dolphintool (early, if already run)
+            # --------------------------------------------------
+            if not gameid_title and dolphintool_title and gameid_source == "dolphintool":
+                
+                gameid_title = " ".join([dolphintool_title] + tags)
+                title_source = "dolphintool"
+
+            # --------------------------------------------------
+            # 10) GameID.py (LATE, if not already run)
+            # --------------------------------------------------
+            if not gameid_title and path.lower().endswith(SUPPORTED_GAMEID_EXTS) and gameidkey:
+                gid2, gid2_src, title2, title2_src, crc_gameid = \
+                    get_gameid_and_title_from_gameid_py(gameid_path, SYSTEM, gameidkey)
+
+                if title2 and not title2.isupper():
+                    gameidpy_title = clean_title(title2)
+                    if gameidpy_title:
+                        gameid_title = " ".join([gameidpy_title] + tags)
+                        title_source = "gameid.py"
+
+            # --------------------------------------------------
+            # filename (final fallback)
+            # --------------------------------------------------
+            
+            if not gameid_title:
+                gameid_title = " ".join([filename_title] + tags)
+                title_source = "filename"
+
+            out.append((
+                display,
+                gameid_title,
+                title_source,
+                game_id,
+                gameid_source,
+                filename
+            ))
 
     return out
 
 # ============================================================
-# ===================== SCANNER REGISTRY =====================
+# ========================= SYSTEMS ==========================
 # ============================================================
 
-SCANNERS = {
-    "ARCADE":    scan_arcade,
+SYSTEMS = {
 
-    "GW":        scan_gamewatch,
-    "GBC":       scan_gb,
-    "GBA":       scan_gba,
-    "NDS":       scan_ds,
-    "3DS":       scan_3ds,
+#    "SYSTEM": {
+#        "display": "Manufacturer - System Name",
+#        "root": _setup["SYS_DIR"],
+#        "exts": .iso,
+#        "db_sections": ["Manufacturer - System Name"],
+#        "id_pattern": Regular expression describing a valid game ID, 
+#        "gameid": (system_arg, supports_id, supports_title, supports_crc),
+#        "scanner": scan_system,
+#    },
 
-    "NES":       scan_nes,
-    "SNES":      scan_snes,
-    "VB":        scan_virtualboy,
-    "N64":       scan_n64,
+    "ARCADE": {
+        "display": "FBNeo - Arcade Games",
+        "root": _setup["ARC_DIR"],
+        "exts": (".zip", ".7z"),
+        "db_sections": ["FBNeo - Arcade Games"],
+        "id_pattern": r"[a-z0-9_]+",
+        "gameid": (None, False, False, False),
+        "scanner": None,
+    },
 
-    "GC":       scan_gamecube,
-    "WII":       scan_wii,
+    "GW": {
+        "display": "Handheld Electronic Game",
+        "root": _setup["NGW_DIR"],
+        "exts": (".zip", ".7z"),
+        "db_sections": ["Handheld Electronic Game"],
+        "id_pattern": r"[A-Z]{2}-[0-9]{2,3}[A-Z]?",
+        "gameid": (None, False, False, False),
+        "scanner": scan_gamewatch,
+    },
 
-    "Genesis":   scan_megadrive,
-    "Saturn":    scan_saturn,
-    "Dreamcast": scan_dreamcast,
+    "GBC": {
+        "display": "Nintendo - Game Boy",
+        "root": _setup["GBC_DIR"],
+        "exts": (".gb", ".gbc"),
+        "db_sections": ["Nintendo - Game Boy", "Nintendo - Game Boy Color"],
+        "id_pattern": r"(?:CGB|DMG)-[A-Z0-9]{4}",
+        "gameid": ("GBC", True, True, True),
+        "scanner": scan_gb,
+    },
 
-    "PSX":       scan_ps1,
-    "PS2":       scan_ps2,
-    "PSP":       scan_psp,
+    "GBA": {
+        "display": "Nintendo - Game Boy Advance",
+        "root": _setup["GBA_DIR"],
+        "exts": (".gba",),
+        "db_sections": ["Nintendo - Game Boy Advance"],
+        "id_pattern": r"AGB-[A-Z0-9]{4}",
+        "gameid": ("GBA", True, True, True),
+        "scanner": scan_gba,
+    },
+
+    "NDS": {
+        "display": "Nintendo - Nintendo DS",
+        "root": _setup["NDS_DIR"],
+        "exts": (".nds",),
+        "db_sections": ["Nintendo - Nintendo DS"],
+        "id_pattern": r"[A-Z]{4}[A-Z0-9]{4}",
+        "gameid": (None, False, False, False),
+        "scanner": scan_ds,
+    },
+
+    "3DS": {
+        "display": "Nintendo - Nintendo 3DS",
+        "root": _setup["N3DS_DIR"],
+        "exts": (".3ds",),
+        "db_sections": ["Nintendo - Nintendo 3DS"],
+        "id_pattern": r"(?:CTR|KTR|BBB)-[A-Z0-9]{4}",
+        "gameid": (None, False, False, False),
+        "scanner": scan_3ds,
+    },
+
+    "NES": {
+        "display": "Nintendo - Nintendo Entertainment System",
+        "root": _setup["NES_DIR"],
+        "exts": (".nes",),
+        "db_sections": ["Nintendo - Nintendo Entertainment System"],
+        "id_pattern": r"[A-Z0-9]{3,6}",
+        "gameid": ("NES", True, True, True),
+        "scanner": None,
+    },
+
+    "SNES": {
+        "display": "Nintendo - Super Nintendo Entertainment System",
+        "root": _setup["SNES_DIR"],
+        "exts": (".sfc", ".smc"),
+        "db_sections": ["Nintendo - Super Nintendo Entertainment System"],
+        "id_pattern": r"(?:SHVC|SNSP|SNS|SFT)[-_]?[A-Z0-9]{2,6}",
+        "gameid": ("SNES", True, True, True),
+        "scanner": None,
+    },
+
+    "VB": {
+        "display": "Nintendo - Virtual Boy",
+        "root": _setup["NVB_DIR"],
+        "exts": (".vb", ".vboy", ".bin"),
+        "db_sections": ["Nintendo - Virtual Boy"],
+        "id_pattern": r"[A-Z0-9]{3,8}",
+        "gameid": (None, False, False, False),
+        "scanner": None,
+    },
+
+    "N64": {
+        "display": "Nintendo - Nintendo 64",
+        "root": _setup["N64_DIR"],
+        "exts": (".z64", ".n64", ".v64"),
+        "db_sections": ["Nintendo - Nintendo 64"],
+        "id_pattern": r"NUS-[A-Z0-9]{4}",
+        "gameid": ("N64", True, True, True),
+        "scanner": scan_n64,
+    },
+
+    "GC": {
+        "display": "Nintendo - GameCube",
+        "root": _setup["NGC_DIR"],
+        "exts": (".iso", ".gcm", ".rvz", ".wbfs"),
+        "db_sections": ["Nintendo - GameCube and Nintendo - Wii"],
+        "id_pattern": r"[A-Z]{4}[0-9]{2}",
+        "gameid": ("GC", True, True, True),
+        "scanner": scan_gamecube,
+    },
+
+    "WII": {
+        "display": "Nintendo - Wii",
+        "root": _setup["WII_DIR"],
+        "exts": (".iso", ".wbfs", ".rvz"),
+        "db_sections": ["Nintendo - GameCube and Nintendo - Wii"],
+        "id_pattern": r"[A-Z]{4}[0-9]{2}",
+        "gameid": ("GC", True, True, True),
+        "scanner": scan_wii,
+    },
+
+    "MasterSys": {
+        "display": "Sega - Master System - Mark III",
+        "root": _setup["SMS_DIR"],
+        "exts": (".sms", ".bin"),
+        "db_sections": ["Sega - Master System - Mark III"],
+        "id_pattern": r"$^",
+        "gameid": (None, False, False, False),
+        "scanner": None,
+    },
+        
+    "GameGear": {
+        "display": "Sega - Game Gear",
+        "root": _setup["SGG_DIR"],
+        "exts": (".gg",),
+        "db_sections": None,
+        "id_pattern": r"$^",
+        "gameid": (None, False, False, False),
+        "scanner": None,
+    },
+
+    "Genesis": {
+        "display": "Sega - Mega Drive - Genesis",
+        "root": _setup["SMD_DIR"],
+        "exts": (".md", ".bin", ".smd", ".gen"),
+        "db_sections": ["Sega - Mega Drive - Genesis"],
+        "id_pattern": r"(?:T-[0-9]{4,7}[A-Z]?|MK-[0-9]{5,8}|HDR-[0-9]{4,6}|\b(?!19(?:8[0-9]|9[0-9]))[0-9]{4}\b)",
+        "gameid": ("Genesis", True, True, True),
+        "scanner": scan_megadrive,
+    },
+    
+    "SegaCD": {
+        "display": "Sega - Mega-CD - Sega CD",
+        "root": _setup["SCD_DIR"],
+        "exts": (".cue", ".iso", ".chd"),
+        "db_sections": ["Sega - Mega-CD - Sega CD"],
+        "id_pattern": r"(?:T-[0-9]{4,7}[A-Z]?|MK-[0-9]{5,8}|HDR-[0-9]{4,6})",
+        "gameid": ("SegaCD", True, True, True),
+        "scanner": scan_segacd,
+    },
+
+    "32X": {
+        "display": "Sega - 32X",
+        "root": _setup["S32X_DIR"],
+        "exts": (".32x", ".bin", ".md"),
+        "db_sections": ["Sega - 32X"],
+        "id_pattern": r"(?:T-[0-9]{4,7}[A-Z]?|MK-[0-9]{5,8}|HDR-[0-9]{4,6})",
+        "gameid": ("Genesis", True, True, True),
+        "scanner": scan_megadrive,
+    },
+
+    "Saturn": {
+        "display": "Sega - Saturn",
+        "root": _setup["SSA_DIR"],
+        "exts": (".cue", ".iso", ".chd"),
+        "db_sections": ["Sega - Saturn"],
+        "id_pattern": r"(?:T-[0-9]{7}|GS-[0-9]{4}|MK-[0-9]{3}|SGS-[0-9]{3})",
+        "gameid": ("Saturn", True, True, True),
+        "scanner": scan_saturn,
+    },
+
+    "Dreamcast": {
+        "display": "Sega - Dreamcast",
+        "root": _setup["SDC_DIR"],
+        "exts": (".gdi", ".cue", ".chd"),
+        "db_sections": ["Sega - Dreamcast"],
+        "id_pattern": r"(?:T-[0-9]{4,5}[A-Z]?|HDR-[0-9]{4,6}|MK-[0-9]{5,8})",
+        "gameid": (None, False, False, False),
+        "scanner": scan_dreamcast,
+    },
+
+    "PSX": {
+        "display": "Sony - PlayStation",
+        "root": _setup["PSX_DIR"],
+        "exts": (".cue", ".iso", ".chd"),
+        "db_sections": ["Sony - PlayStation"],
+        "id_pattern": r"(?:SLUS|SLES|SLPS|SLPM|SCUS|SCES|SCED|SCPS|SLED|HDR|PCPX|PAPX|PBPX|DTL)[_\-\.]?\d{3}[_\-\.]?\d{2}",
+        "gameid": ("PSX", True, True, True),
+        "scanner": scan_psx,
+    },
+
+    "PS2": {
+        "display": "Sony - PlayStation 2",
+        "root": _setup["PS2_DIR"],
+        "exts": (".iso", ".chd"),
+        "db_sections": ["Sony - PlayStation 2"],
+        "id_pattern": r"(?:SLES|SLPM|SLUS|SLPS|SCED|SCES|SCUS|SLKA|SCPS|SLED|SCKA|SCAJ|PCPX|PAPX|PBPX|SCCS|TCES|SCPN|TLES|PSXC|SCPM)[_\-\.]?\d{3}[_\-\.]?\d{2}",
+        "gameid": ("PS2", True, True, True),
+        "scanner": scan_ps2,
+    },
+
+    "PSP": {
+        "display": "Sony - PlayStation Portable",
+        "root": _setup["PSP_DIR"],
+        "exts": (".iso", ".cso", ".chd"),
+        "db_sections": ["Sony - PlayStation Portable"],
+        "id_pattern": r"(?:ULES|ULJM|ULUS|ULJS|UCES|UCUS|ULKS|UCAS|UCJS|ULAS|UCKS|UCET|UCED|UCJP|UCJX|ULET|UCJB|ROSE|UTST|NPEG|NPUG|NPJG|NPJG|NPHG|HONEY|KAD)[_\-\.]?\d{3}[_\-\.]?\d{2}",
+        "gameid": ("PSP", True, True, True),
+        "scanner": scan_psp,
+    },
 }
+ 
+GAMEID_RE = {}
+for sys, cfg in SYSTEMS.items():
+    pat = cfg["id_pattern"]
+    if not pat:
+        continue
+        
+    GAMEID_RE[sys] = re.compile(rf"(?<![A-Z0-9])({pat})(?![A-Z0-9])")
 
 # ============================================================
 # ============================ MAIN =========================
@@ -2527,58 +1768,77 @@ OUTPUT_FILE = "local_games.txt"
 def main():
     results = []
 
-    for system, platform, root, exts in SYSTEMS:
-        if not os.path.isdir(root):
+    # Get rows from unified scanner
+    rows = scan_systems()
+
+    for row in rows:
+        # Accept both 6-tuple and legacy 5-tuple for backward-compatibility
+        if len(row) == 6:
+            platform, gameid_title, title_source, game_id, gameid_source, filename = row
+        elif len(row) == 5:
+            platform, gameid_title, game_id, gameid_source, filename = row
+            title_source = None
+        else:
+            if DEBUG:
+                print(f"Skipping row with unexpected shape ({len(row)}): {row}")
             continue
 
-        scanner = SCANNERS.get(system)
-        if not scanner:
-            continue
+        # find system + root from platform display name
+        system_key = None
+        root = None
+        for sysk, cfg in SYSTEMS.items():
+            if cfg.get("display") == platform:
+                system_key = sysk
+                root = cfg.get("root")
+                break
 
-        try:
-            rows = scanner()
-        except Exception:
-            rows = []
+        path = os.path.join(root, filename) if root else None
 
-        for platform2, gameid_title, game_id, gameid_source, filename in rows:
-            if gameid_source == "override":
-                final_title = gameid_title
-                title_source = "override"
+        if not gameid_title:
+            base, tags = split_filename(filename)
+            filename_title = clean_title(base)
+            gameid_title = " ".join([filename_title] + tags)
+            title_source = "filename"
+
+        game_id = game_id or "N/A"
+        gameid_source = gameid_source or "unknown"
+        title_source = title_source or "unknown"
+
+        sep = f" {Fore.BLACK}|{Style.RESET_ALL} "
+
+        if PRINT_ALL:
+            if DEBUG:
+                print(
+                    f"{platform}"
+                    f"{sep}{gameid_title} {Fore.LIGHTBLACK_EX}({title_source}){Style.RESET_ALL}"
+                    f"{sep}{game_id} {Fore.LIGHTBLACK_EX}({gameid_source}){Style.RESET_ALL}"
+                    f"{sep}{filename}",
+                    flush=True
+                )
             else:
-                path = os.path.join(root, filename)
-                final_title, title_source, game_id, gameid_source = resolve_title(
-                    game_id,
-                    gameid_title,
-                    filename,
-                    path,
-                    system,
-                    gameid_source
+                print(
+                    f"{platform}"
+                    f"{sep}{gameid_title}"
+                    f"{sep}{game_id}"
+                    f"{sep}{filename}"
                 )
 
-            sep = f" {Fore.BLACK}|{Style.RESET_ALL} "
+        # Store full internal result (unchanged)
+        results.append((
+            platform,
+            gameid_title,
+            title_source,
+            game_id,
+            gameid_source,
+            filename
+        ))
 
-            if PRINT_ALL:
-                if DEBUG:
-                    print(
-                        f"{platform2}"
-                        f"{sep}{final_title} {Fore.LIGHTBLACK_EX}({title_source}){Style.RESET_ALL}"
-                        f"{sep}{game_id} {Fore.LIGHTBLACK_EX}({gameid_source}){Style.RESET_ALL}"
-                        f"{sep}{filename}"
-                    )
-                else:
-                    print(
-                        f"{platform2}"
-                        f"{sep}{final_title}"
-                        f"{sep}{game_id}"
-                        f"{sep}{filename}"
-                    )
-
-            results.append((platform2, final_title, title_source, game_id or "N/A", gameid_source or "unknown", filename))
-
+    # --------------------------------------------------
+    # Write output file (NO source columns)
+    # --------------------------------------------------
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-    
         f.write("Platform | Title | GameID | File\n\n")
-        for p, t, _, gid, _, fn in results:
+        for p, t, ts, gid, gsrc, fn in results:
             f.write(f"{p} | {t} | {gid} | {fn}\n")
 
     print(f"\nDone. {len(results)} games written to {OUTPUT_FILE}")

@@ -33,8 +33,12 @@ def load_setup(path):
     exec(code, safe, env)
     return env
 
-
+PRINT_ALL = False # If True print every game, even if no playtime.
 SETUP = load_setup(CONFIG_FILE)
+
+CODEWORDS = [
+    "(patched)", "[patched]", "(hack)", "[hack]",
+]
 
 # ============================================================
 # ========================== PATHS ===========================
@@ -44,6 +48,8 @@ LOCAL_DB         = "local_games.txt"
 HISTORY          = "history.txt"
 PLAYTIME_EXPORT  = "playtime_export.txt"
 SCANNER          = "game_scanner.py"
+
+PRINT_ALL = bool(SETUP.get("PRINT_ALL", False))
 
 RETROARCH_DIR         = SETUP["RETROARCH_DIR"]
 RETROARCH_CFG_DIR     = SETUP["RETROARCH_CFG_DIR"]
@@ -201,12 +207,51 @@ SYSTEMS = {
         ],
     },
 
-    "Genesis": {
+    "MasterSys": {
         "platforms": [
-            "Sega - Mega Drive",
+            "Sega - Master System - Mark III",
         ],
         "cores": [
             "Genesis Plus GX",
+            "SMS Plus GX",
+        ],
+    },
+
+    "GameGear": {
+        "platforms": [
+            "Sega - Game Gear",
+        ],
+        "cores": [
+            "Genesis Plus GX",
+            "SMS Plus GX",
+        ],
+    },
+
+    "Genesis": {
+        "platforms": [
+            "Sega - Mega Drive - Genesis",
+        ],
+        "cores": [
+            "Genesis Plus GX",
+            "PicoDrive",
+        ],
+    },
+
+    "SegaCD": {
+        "platforms": [
+            "Sega - Mega-CD - Sega CD",
+        ],
+        "cores": [
+            "Genesis Plus GX",
+            "PicoDrive",
+        ],
+    },
+
+    "32X": {
+        "platforms": [
+            "Sega - 32X",
+        ],
+        "cores": [
             "PicoDrive",
         ],
     },
@@ -247,7 +292,7 @@ SYSTEMS = {
 
     "PS2": {
         "platforms": [
-            "Sony - Playstation 2",
+            "Sony - PlayStation 2",
         ],
         "cores": [
             "PCSX2",
@@ -380,7 +425,6 @@ def load_retroarch_playtime():
     if not os.path.isdir(logs_root):
         return out
 
-    # Build allowed roots: logs/, logs/<platform>/, logs/<core>/
     allowed_roots = [logs_root]
 
     for platform, system in PLATFORM_TO_SYSTEM.items():
@@ -395,28 +439,38 @@ def load_retroarch_playtime():
                 allowed_roots.append(core_dir)
 
     for root in allowed_roots:
-        for dirpath, _, files in os.walk(root):
+        for _, _, files in os.walk(root):
             for fname in files:
                 if not fname.lower().endswith(".lrtl"):
                     continue
 
-                path = os.path.join(dirpath, fname)
+                path = os.path.join(root, fname)
                 rom = os.path.splitext(fname)[0]
 
                 try:
-                    with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                        for line in f:
-                            if line.startswith("Total playtime"):
-                                seconds = int(line.split(":")[1].strip())
-                                out[rom] = {
-                                    "seconds": seconds,
-                                    "last_played": None
-                                }
-                except:
+                    with open(path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+
+                    runtime = data.get("runtime", "")
+                    last = data.get("last_played", "")
+
+                    # Parse H:MM:SS
+                    seconds = 0
+                    if runtime:
+                        parts = runtime.split(":")
+                        if len(parts) == 3:
+                            h, m, s = map(int, parts)
+                            seconds = h * 3600 + m * 60 + s
+
+                    out[rom] = {
+                        "seconds": seconds,
+                        "last_played": last
+                    }
+
+                except Exception:
                     pass
 
     return out
-
 
 # ---------- Dolphin ----------
 
@@ -992,7 +1046,7 @@ def run_scanner(force=False):
     subprocess.run(["python", SCANNER], env=env)
 
 
-def cmd_force_rescan():
+def cmd_rescan():
     run_scanner(force=True)
 
     # Rebuild playtime export after rescan
@@ -1066,7 +1120,16 @@ def cmd_export_playtime():
     dolphin = load_dolphin_playtime()
     lb = load_launchbox_lastplayed()
 
+    CODEWORDS = [
+        "(patched)", "[patched]", "(hack)", "[hack]",
+    ]
+
     out = []
+    printed = []  # (row_color, row_plain)
+
+    # Only used when PRINT_ALL is False
+    # key -> (bracket_count, has_codeword, row_color, row_plain)
+    best = {}
 
     for line in rows:
         try:
@@ -1079,23 +1142,29 @@ def cmd_export_playtime():
         seconds = 0
         last_played = ""
 
+        # ---------- RetroArch ----------
         rom = os.path.splitext(os.path.basename(file))[0]
         if rom in ra:
-            seconds = ra[rom]["seconds"]
-            if ra[rom]["last_played"]:
-                last_played = datetime.datetime.fromtimestamp(
-                    int(ra[rom]["last_played"])
-                ).strftime("%Y-%m-%d %H:%M:%S")
+            seconds = ra[rom].get("seconds", 0)
+            lp = ra[rom].get("last_played", "")
+            if lp:
+                last_played = lp
 
+        # ---------- PCSX2 ----------
         if system == "PS2" and game_id in pcsx2:
-            seconds, last = pcsx2[game_id]
-            if last:
-                last_played = last
+            seconds, lp = pcsx2[game_id]
+            if lp:
+                last_played = lp
 
+        # ---------- Dolphin ----------
         if system in ("GC", "WII") and game_id in dolphin:
             seconds = dolphin[game_id]
             if game_id in lb:
                 last_played = lb[game_id]
+
+        # ---------- Low-playtime filtering ----------
+        if seconds < 300 and not PRINT_ALL:
+            continue
 
         sep_color = f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} "
         sep_plain = " | "
@@ -1118,12 +1187,49 @@ def cmd_export_playtime():
             f"{sep_color}{file}"
         )
 
-        print(row_color)
-        out.append(row_plain)
+        if not PRINT_ALL:
+            key = (game_id, seconds)
+
+            bracket_count = title.count("[")
+            title_l = title.lower()
+            has_codeword = any(cw in title_l for cw in CODEWORDS)
+
+            prev = best.get(key)
+            if prev:
+                prev_brackets, prev_has_codeword, _, _ = prev
+
+                # 1. fewer brackets wins
+                if bracket_count > prev_brackets:
+                    continue
+                if bracket_count < prev_brackets:
+                    pass
+                else:
+                    # 2. no codeword wins
+                    if has_codeword and not prev_has_codeword:
+                        continue
+                    if not has_codeword and prev_has_codeword:
+                        pass
+                    else:
+                        # 3. first wins
+                        continue
+
+            best[key] = (bracket_count, has_codeword, row_color, row_plain)
+
+        else:
+            printed.append((row_color, row_plain))
+
+    # ---------- Emit results ----------
+    if PRINT_ALL:
+        for row_color, row_plain in printed:
+            print(row_color)
+            out.append(row_plain)
+    else:
+        for _, _, row_color, row_plain in best.values():
+            print(row_color)
+            out.append(row_plain)
 
     save_playtime_export(out)
     print(f"Created {PLAYTIME_EXPORT} ({len(out)} entries)")
-
 
 # ---------- Sync ----------
 
@@ -1257,10 +1363,8 @@ def cmd_modify():
             return
 
     try:
+        # Backup saves only (never ROMs)
         backup_tree_once(os.path.join(RETROARCH_DIR, "saves"))
-
-        for rom_dir, old_file, _ in rename_jobs:
-            backup_file_once(os.path.join(rom_dir, old_file))
 
         apply_rename_jobs(rename_jobs)
 
@@ -1268,10 +1372,12 @@ def cmd_modify():
             write_retroarch_time(filename, seconds, lastplayed)
             write_launchbox_time(platform, gameid, filename, seconds, lastplayed)
 
-            if platform in ("Nintendo - GameCube", "Nintendo - Wii"):
+            system = PLATFORM_TO_SYSTEM.get(platform)
+
+            if system in ("GC", "WII"):
                 write_dolphin_time(gameid, seconds)
 
-            if platform == "Sony - Playstation 2":
+            if system == "PS2":
                 write_pcsx2_time(gameid, seconds, lastplayed)
 
         replace_lines_in_file(LOCAL_DB, replacements_local)
@@ -1440,7 +1546,7 @@ def cmd_backup():
 
 COMMANDS = {
     "check paths": cmd_check_paths,
-    "force rescan": cmd_force_rescan,
+    "rescan": cmd_rescan,
     "sync": cmd_sync,
     "modify": cmd_modify,
     "revert": cmd_revert,
@@ -1451,7 +1557,7 @@ Commands:
 
   help            - Show this screen  
   check paths     - Verify all emulator and platform paths
-  force rescan    - Refresh game library
+  rescan          - Refresh game library
   sync            - Sync playtime into LaunchBox
   modify          - Batch edit titles / IDs / playtime
   revert <n>      - Undo or redo a modification
@@ -1462,11 +1568,18 @@ Commands:
 }
 
 def main():
-    if os.path.exists(LOCAL_DB):
-        try:
-            cmd_export_playtime()
-        except:
-            pass
+    # --------------------------------------------------
+    # Ensure local_games.txt exists
+    # --------------------------------------------------
+    if not os.path.exists(LOCAL_DB):
+        print("local_games.txt not found. Running game scanner...")
+        subprocess.run([sys.executable, SCANNER])
+
+    # --------------------------------------------------
+    # Always refresh playtime on startup
+    # --------------------------------------------------
+    print("Importing playtime...")
+    cmd_export_playtime()
 
     print("\nGameIndex ready. Type 'help' to see available commands.")
 
@@ -1495,7 +1608,6 @@ def main():
             COMMANDS[match](arg)
         else:
             COMMANDS[match]()
-
 
 if __name__ == "__main__":
     main()

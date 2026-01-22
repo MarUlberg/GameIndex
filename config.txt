@@ -4,6 +4,9 @@
 
 import os
 
+# If True, prints games that have less then 5 minutes playtime
+PRINT_ALL = True 
+
 # ---------------- LaunchBox ----------------
 
 LAUNCHBOX_DIR = r"H:\LaunchBox"
@@ -23,9 +26,13 @@ LAUNCHBOX_PLATFORMS = {
     "Nintendo - Nintendo 64": 							"Nintendo 64.xml",
     "Nintendo - GameCube": 								"Nintendo GameCube.xml",
     "Nintendo - Wii": 									"Nintendo Wii.xml",
-    "Sega - Mega Drive": 								"Sega Mega Drive.xml",
-    "Sega - Saturn": 									"Sega Saturn.xml",
-    "Sega - Dreamcast": 								"Sega Dreamcast.xml",
+    "Sega - Master System - Mark III":                  "Sega Master System.xml",
+    "Sega - Game Gear":                                 "Sega Game Gear.xml",
+    "Sega - Mega Drive - Genesis":                      "Sega Mega Drive.xml",
+    "Sega - Mega-CD - Sega CD":                         "Sega CD.xml",
+    "Sega - 32X":                                       "Sega 32X.xml",
+    "Sega - Saturn":                                    "Sega Saturn.xml",
+    "Sega - Dreamcast":                                 "Sega Dreamcast.xml",
     "Sony - PlayStation": 								"Sony Playstation.xml",
     "Sony - Playstation 2": 							"Sony Playstation 2.xml",
     "Sony - PlayStation Portable": 						"Sony PlayStation Portable.xml",
@@ -55,7 +62,11 @@ N64_DIR  = os.path.join(GAMES_DIR, "Nintendo - Nintendo 64")
 NGC_DIR  = os.path.join(GAMES_DIR, "Nintendo - GameCube")
 WII_DIR  = os.path.join(GAMES_DIR, "Nintendo - Wii")
 
-SMD_DIR  = os.path.join(GAMES_DIR, "Sega - Mega Drive")
+SMS_DIR  = os.path.join(GAMES_DIR, "Sega - Master System - Mark III")
+SGG_DIR  = os.path.join(GAMES_DIR, "Sega - Game Gear")
+SMD_DIR  = os.path.join(GAMES_DIR, "Sega - Mega Drive - Genesis")
+SCD_DIR  = os.path.join(GAMES_DIR, "Sega - Mega-CD - Sega CD")
+S32X_DIR  = os.path.join(GAMES_DIR, "Sega - 32X")
 SSA_DIR  = os.path.join(GAMES_DIR, "Sega - Saturn")
 SDC_DIR  = os.path.join(GAMES_DIR, "Sega - Dreamcast")
 
