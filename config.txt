@@ -9,7 +9,7 @@ PRINT_ALL = True
 
 # ---------------- LaunchBox ----------------
 
-LAUNCHBOX_DIR = "H:\\LaunchBox"
+LAUNCHBOX_DIR = "C:\\LaunchBox"
 LAUNCHBOX_DATA_DIR = os.path.join(LAUNCHBOX_DIR, "Data", "Platforms")
 
 # ---------------- LaunchBox Platform XML ----------------
@@ -52,7 +52,7 @@ LAUNCHBOX_PLATFORMS = {
 
 # ---------------- RetroArch ----------------
 
-RETROARCH_DIR = "H:\\LaunchBox\\!Emulators\\RetroArch"
+RETROARCH_DIR = "C:\\Program Files\\RetroArch\\"
 RETROARCH_CFG_DIR = os.path.join(RETROARCH_DIR, "config")
 RETROARCH_PLAYLIST_DIR = os.path.join(RETROARCH_DIR, "playlists")
 RETROARCH_LOG_DIR = os.path.join(RETROARCH_PLAYLIST_DIR, "logs")
@@ -89,13 +89,13 @@ PSP_DIR  = os.path.join(GAMES_DIR, "Sony - PlayStation Portable")
 
 # ---------------- Dolphin ----------------
 
-DOLPHIN_DIR = "H:\\LaunchBox\\!Emulators\\Dolphin"
+DOLPHIN_DIR = "C:\\Program Files\\Dolphin Emulator"
 DOLPHIN_TOOL = os.path.join(DOLPHIN_DIR, "DolphinTool.exe")
 DOLPHIN_PLAYTIME = os.path.join(DOLPHIN_DIR, "User", "Config", "TimePlayed.ini")
 
 # ---------------- PCSX2 ----------------
 
-PCSX2_DIR = "H:\\LaunchBox\\!Emulators\\PCSX2"
+PCSX2_DIR = "C:\\Program Files\\PCSX2"
 PCSX2_PLAYTIME = os.path.join(PCSX2_DIR, "inis", "playtime.dat")
 
 # ---------------- Minecraft ----------------
