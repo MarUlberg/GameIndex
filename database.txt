@@ -37073,8 +37073,6 @@ T-83096 = Zool: Ninja of the 'Nth' Dimension
 G4023 = Zoom!
 T-139086 = Zoop
 
-
-
 [Sega - Mega-CD - Sega CD]		
 T-93175 = 3 Ninjas Kick Back
 T-49064 = A-Rank Thunder: Tanjou-hen

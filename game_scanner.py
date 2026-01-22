@@ -14,7 +14,7 @@ init()
 # ========================== SETUP ===========================
 # ============================================================
 
-CONFIG_FILE = "config.txt"
+CONFIG_FILE = "specialconfig.txt" if os.path.exists("specialconfig.txt") else "config.txt"
 
 PRINT_ALL = True # If True shows every game as it is scanned
 SKIP_SCAN = False # If True skips ROM scan and moves on to GameID.py (For testing)
@@ -1275,6 +1275,7 @@ def scan_psp(path):
 ENABLED_SYSTEMS = {
     "ARCADE",
     "GW",
+    "GB",
     "GBC",
     "GBA",
     "NDS",
@@ -1300,7 +1301,6 @@ ENABLED_SYSTEMS = {
 
     
 def scan_systems():
-    out = []
 
     for system_key, cfg in SYSTEMS.items():
 
@@ -1347,15 +1347,15 @@ def scan_systems():
                 gameid_title= override_title
                 game_id = override_id
                 
-                out.append((
+                yield (
                     display,
-                    gameid_title,  
-                    "override",   
-                    game_id,  
+                    gameid_title,
+                    "override",
+                    game_id,
                     "override",
                     filename
-                ))
-                continue       
+                )
+                continue               
                 
             if not SKIP_SCAN:
 
@@ -1375,15 +1375,15 @@ def scan_systems():
                     gameid_title = " ".join([filename_title] + tags)
                     game_id = crc32_file(path)
                     
-                    out.append((
+                    yield (
                         display,
                         gameid_title,
                         "filename",
                         game_id,
                         "crc",
                         filename
-                    ))
-                    continue      
+                    )
+                    continue             
 
                 # ==============================================
                 # 4) System scanner (container / header logic)
@@ -1503,16 +1503,15 @@ def scan_systems():
                 gameid_title = " ".join([filename_title] + tags)
                 title_source = "filename"
 
-            out.append((
+            yield (
                 display,
                 gameid_title,
                 title_source,
                 game_id,
                 gameid_source,
                 filename
-            ))
+            )
 
-    return out
 
 # ============================================================
 # ========================= SYSTEMS ==========================
@@ -1550,10 +1549,20 @@ SYSTEMS = {
         "scanner": scan_gamewatch,
     },
 
-    "GBC": {
+    "GB": {
         "display": "Nintendo - Game Boy",
+        "root": _setup["GB_DIR"],
+        "exts": (".gb",".gbc"),
+        "db_sections": ["Nintendo - Game Boy", "Nintendo - Game Boy Color"],
+        "id_pattern": r"(?:CGB|DMG)-[A-Z0-9]{4}",
+        "gameid": ("GBC", True, True, True),
+        "scanner": scan_gb,
+    },
+
+    "GBC": {
+        "display": "Nintendo - Game Boy Color",
         "root": _setup["GBC_DIR"],
-        "exts": (".gb", ".gbc"),
+        "exts": (".gb",".gbc"),
         "db_sections": ["Nintendo - Game Boy", "Nintendo - Game Boy Color"],
         "id_pattern": r"(?:CGB|DMG)-[A-Z0-9]{4}",
         "gameid": ("GBC", True, True, True),
@@ -1595,7 +1604,7 @@ SYSTEMS = {
         "root": _setup["NES_DIR"],
         "exts": (".nes",),
         "db_sections": ["Nintendo - Nintendo Entertainment System"],
-        "id_pattern": r"[A-Z0-9]{3,6}",
+        "id_pattern": r"$^",
         "gameid": ("NES", True, True, True),
         "scanner": None,
     },
@@ -1751,6 +1760,23 @@ SYSTEMS = {
     },
 }
  
+# ============================================================
+# ============ NORMALIZE MERGED SYSTEM ROOTS =================
+# ============================================================
+
+def same_path(a, b):
+    if not a or not b:
+        return False
+    return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+
+gb_root  = SYSTEMS.get("GB", {}).get("root")
+gbc_root = SYSTEMS.get("GBC", {}).get("root")
+
+if same_path(gb_root, gbc_root):
+    # Merged GB/GBC folders → scan once (GB wins)
+    SYSTEMS.pop("GBC", None)
+
+
 GAMEID_RE = {}
 for sys, cfg in SYSTEMS.items():
     pat = cfg["id_pattern"]
@@ -1758,6 +1784,7 @@ for sys, cfg in SYSTEMS.items():
         continue
         
     GAMEID_RE[sys] = re.compile(rf"(?<![A-Z0-9])({pat})(?![A-Z0-9])")
+
 
 # ============================================================
 # ============================ MAIN =========================
@@ -1845,4 +1872,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-input()
+#input()

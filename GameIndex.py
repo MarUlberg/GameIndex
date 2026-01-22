@@ -18,7 +18,27 @@ init()
 # ========================== SETUP ===========================
 # ============================================================
 
-CONFIG_FILE = "config.txt"
+CONFIG_FILE = "specialconfig.txt" if os.path.exists("specialconfig.txt") else "config.txt"
+
+def load_setup_minimal(path):
+    env = {}
+    if not os.path.exists(path):
+        return env
+
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or "=" not in line:
+                continue
+
+            key, val = line.split("=", 1)
+            key = key.strip()
+            val = val.strip()
+
+            if val.startswith(("'", '"')) and val.endswith(("'", '"')):
+                env[key] = val[1:-1]
+
+    return env
 
 def load_setup(path):
     if not os.path.exists(path):
@@ -34,6 +54,194 @@ def load_setup(path):
     return env
 
 PRINT_ALL = False # If True print every game, even if no playtime.
+
+# ============================================================
+# =============== VERIFY / REPAIR CORE PATHS =================
+# ============================================================
+
+def write_config_updates(path, updates):
+    with open(path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    def escape(p):
+        return p.replace("\\", "\\\\")
+
+    for key, value in updates:
+        written = False
+        for i, line in enumerate(lines):
+            if line.strip().startswith(key + " "):
+                lines[i] = f'{key} = "{escape(value)}"\n'
+                written = True
+                break
+
+        if not written:
+            lines.append(f'{key} = "{escape(value)}"\n')
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+# ============================================================
+# =============== PROGRAM ROOT AUTO-DETECTION ===============
+# ============================================================
+
+def locate_program_roots():
+    try:
+        import win32com.client
+    except ImportError:
+        return {}
+
+    PROGRAMS = {
+        "RETROARCH_DIR": ("RetroArch", "self"),
+        "DOLPHIN_DIR":   ("Dolphin", "self"),
+        "PCSX2_DIR":     ("PCSX2", "self"),
+        "LAUNCHBOX_DIR": ("LaunchBox", "launchbox"),
+    }
+
+    start_menu_dirs = [
+        os.path.join(os.environ.get("APPDATA", ""), r"Microsoft\Windows\Start Menu\Programs"),
+        os.path.join(os.environ.get("PROGRAMDATA", ""), r"Microsoft\Windows\Start Menu\Programs"),
+    ]
+
+    def is_valid_exe(path, name):
+        base = os.path.basename(path).lower()
+        return (
+            base.endswith(".exe")
+            and not base.startswith("unins")
+            and name.lower() in base
+        )
+
+    def resolve_root(exe_path, rule):
+        exe_dir = os.path.dirname(exe_path)
+        exe_name = os.path.basename(exe_path).lower()
+
+        if rule == "self":
+            return exe_dir
+
+        if rule == "launchbox":
+            if os.path.basename(exe_dir).lower() == "core":
+                return os.path.dirname(exe_dir)
+            if exe_name == "launchbox.exe":
+                return exe_dir
+
+        return exe_dir
+
+    shell = win32com.client.Dispatch("WScript.Shell")
+    found = {}
+
+    for cfg_key, (prog_name, rule) in PROGRAMS.items():
+        found[cfg_key] = None
+
+        for base in start_menu_dirs:
+            if not os.path.isdir(base):
+                continue
+
+            for root, _, files in os.walk(base):
+                for fname in files:
+                    if not fname.lower().endswith(".lnk"):
+                        continue
+                    if prog_name.lower() not in fname.lower():
+                        continue
+
+                    try:
+                        shortcut = shell.CreateShortCut(os.path.join(root, fname))
+                        target = shortcut.Targetpath
+                        if not target or not is_valid_exe(target, prog_name):
+                            continue
+
+                        found[cfg_key] = resolve_root(target, rule)
+                        break
+                    except Exception:
+                        continue
+
+                if found[cfg_key]:
+                    break
+            if found[cfg_key]:
+                break
+
+    return found
+        
+# ============================================================
+# =============== EARLY PATH VERIFICATION ====================
+# ============================================================
+
+MIN_SETUP = load_setup_minimal(CONFIG_FILE)
+
+# Emulator presence rules
+REQUIRED_EMULATORS = {
+    "RETROARCH_DIR":  ["retroarch.exe"],
+    "DOLPHIN_DIR":    ["dolphin.exe"],
+    "PCSX2_DIR":      ["pcsx2.exe"],
+    "LAUNCHBOX_DIR":  ["launchbox.exe", os.path.join("core", "launchbox.exe")],
+}
+
+def has_required_exe(root, candidates):
+    if not root or not os.path.isdir(root):
+        return False
+
+    # PCSX2: name + location are not stable
+    if candidates == ["pcsx2.exe"]:
+        # Check root
+        for name in os.listdir(root):
+            low = name.lower()
+            if low.startswith("pcsx2") and low.endswith(".exe"):
+                return True
+
+        # Check one level deep (portable builds)
+        for sub in os.listdir(root):
+            subdir = os.path.join(root, sub)
+            if not os.path.isdir(subdir):
+                continue
+            for name in os.listdir(subdir):
+                low = name.lower()
+                if low.startswith("pcsx2") and low.endswith(".exe"):
+                    return True
+
+        return False
+
+    # Exact-match rules for other emulators
+    for rel in candidates:
+        if os.path.isfile(os.path.join(root, rel)):
+            return True
+
+    return False
+
+
+def status_ok():
+    return f"[ {Fore.LIGHTGREEN_EX}OK{Style.RESET_ALL} ]"
+
+def status_xx():
+    return f"[ {Fore.LIGHTRED_EX}XX{Style.RESET_ALL} ]"
+
+missing = []
+
+for key, exes in REQUIRED_EMULATORS.items():
+    path = MIN_SETUP.get(key)
+    if not has_required_exe(path, exes):
+        missing.append(key)
+
+if missing:
+    print("\nVerifying emulator paths:\n")
+
+    found = locate_program_roots()
+    updates = []
+
+    for key in missing:
+        path = found.get(key)
+        exes = REQUIRED_EMULATORS[key]
+
+        if has_required_exe(path, exes):
+            print(f"{status_ok()} {key}: {path}")
+            updates.append((key, path))
+        else:
+            print(f"{status_xx()} {key}: NOT FOUND")
+
+    if updates:
+        write_config_updates(CONFIG_FILE, updates)
+
+
+# ------------------------------------------------------------
+# Now load the full config safely
+# ------------------------------------------------------------
 SETUP = load_setup(CONFIG_FILE)
 
 CODEWORDS = [
@@ -66,6 +274,7 @@ LAUNCHBOX_DATA_DIR   = SETUP["LAUNCHBOX_DATA_DIR"]
 LAUNCHBOX_PLATFORMS  = SETUP["LAUNCHBOX_PLATFORMS"]
 GAMES_DIR           = SETUP["GAMES_DIR"]
 
+
 # ============================================================
 # ========================= SYSTEMS ==========================
 # ============================================================
@@ -93,6 +302,18 @@ SYSTEMS = {
     "GB": {
         "platforms": [
             "Nintendo - Game Boy",
+        ],
+        "cores": [
+            "Gambatte",
+            "SameBoy",
+            "Gearboy",
+            "TGB Dual",
+        ],
+    },
+
+    "GBC": {
+        "platforms": [
+            "Nintendo - Game Boy Color",
         ],
         "cores": [
             "Gambatte",
@@ -755,6 +976,63 @@ def write_pcsx2_time(gameid, seconds, lastplayed):
 
     with open(PCSX2_PLAYTIME, "wb") as f:
         f.write(newline.join(out) + newline)
+  
+# ---------- Minecraft ----------
+  
+def load_minecraft_playtime():
+    root = SETUP.get("MINECRF_DIR")
+    if not root:
+        return None
+
+    saves = os.path.join(root, "saves")
+    if not os.path.isdir(saves):
+        return None
+
+    total_ticks = 0
+    last_played_ts = 0
+
+    for world in os.listdir(saves):
+        stats_dir = os.path.join(saves, world, "stats")
+        if not os.path.isdir(stats_dir):
+            continue
+
+        for fname in os.listdir(stats_dir):
+            if not fname.lower().endswith(".json"):
+                continue
+
+            path = os.path.join(stats_dir, fname)
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except:
+                continue
+
+            stats = data.get("stats", {}).get("minecraft:custom", {})
+            ticks = stats.get("minecraft:play_time", 0)
+
+            try:
+                total_ticks += int(ticks)
+            except:
+                pass
+
+            # Use file modification time for "last played"
+            try:
+                mtime = os.path.getmtime(path)
+                if mtime > last_played_ts:
+                    last_played_ts = mtime
+            except:
+                pass
+
+    if total_ticks == 0:
+        return None
+
+    seconds = total_ticks // 20
+    last_played = datetime.datetime.fromtimestamp(
+        last_played_ts
+    ).strftime("%Y-%m-%d %H:%M:%S")
+
+    return seconds, last_played
+
 
 # ============================================================
 # ===================== RENAME ENGINE ========================
@@ -1119,6 +1397,7 @@ def cmd_export_playtime():
     pcsx2 = load_pcsx2_playtime()
     dolphin = load_dolphin_playtime()
     lb = load_launchbox_lastplayed()
+    minecraft = load_minecraft_playtime()
 
     CODEWORDS = [
         "(patched)", "[patched]", "(hack)", "[hack]",
@@ -1217,6 +1496,28 @@ def cmd_export_playtime():
 
         else:
             printed.append((row_color, row_plain))
+
+    # ---------- Minecraft ----------
+    if minecraft:
+        seconds, last_played = minecraft
+
+        if seconds >= 500 or PRINT_ALL:
+            row_plain = (
+                "PC - Minecraft | Minecraft | MINECRAFT | "
+                f"{seconds}s | {last_played} | worlds"
+            )
+
+            row_color = (
+                f"PC - Minecraft"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} Minecraft Java Edition"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} MINECRAFT-JAVA"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {seconds}s"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {last_played}"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} Minecraft.exe"
+            )
+
+            print(row_color)
+            out.append(row_plain)
 
     # ---------- Emit results ----------
     if PRINT_ALL:

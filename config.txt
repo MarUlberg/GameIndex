@@ -9,48 +9,61 @@ PRINT_ALL = True
 
 # ---------------- LaunchBox ----------------
 
-LAUNCHBOX_DIR = r"H:\LaunchBox"
+LAUNCHBOX_DIR = "H:\\LaunchBox"
 LAUNCHBOX_DATA_DIR = os.path.join(LAUNCHBOX_DIR, "Data", "Platforms")
 
 # ---------------- LaunchBox Platform XML ----------------
 LAUNCHBOX_PLATFORMS = {
-    "FBNeo - Arcade Games": 							"Arcade.xml",
-    "Handheld Electronic Game": 						"Game & Watch.xml",
-    "Nintendo - Game Boy": 								"Nintendo Game Boy Color.xml",
-    "Nintendo - Game Boy Advance": 						"Nintendo Game Boy Advance.xml",
-    "Nintendo - Nintendo DS": 							"Nintendo DS.xml",
-    "Nintendo - Nintendo 3DS": 							"Nintendo 3DS.xml",
-    "Nintendo - Nintendo Entertainment System": 		"Nintendo Entertainment System.xml",
-    "Nintendo - Super Nintendo Entertainment System": 	"Super Nintendo.xml",
-    "Nintendo - Nintendo Virtual Boy": 					"Nintendo Virtual Boy.xml",
-    "Nintendo - Nintendo 64": 							"Nintendo 64.xml",
-    "Nintendo - GameCube": 								"Nintendo GameCube.xml",
-    "Nintendo - Wii": 									"Nintendo Wii.xml",
-    "Sega - Master System - Mark III":                  "Sega Master System.xml",
-    "Sega - Game Gear":                                 "Sega Game Gear.xml",
-    "Sega - Mega Drive - Genesis":                      "Sega Mega Drive.xml",
-    "Sega - Mega-CD - Sega CD":                         "Sega CD.xml",
-    "Sega - 32X":                                       "Sega 32X.xml",
-    "Sega - Saturn":                                    "Sega Saturn.xml",
-    "Sega - Dreamcast":                                 "Sega Dreamcast.xml",
-    "Sony - PlayStation": 								"Sony Playstation.xml",
-    "Sony - Playstation 2": 							"Sony Playstation 2.xml",
-    "Sony - PlayStation Portable": 						"Sony PlayStation Portable.xml",
+    # ---------- Arcade ----------
+    "FBNeo - Arcade Games":                         "Arcade.xml",
+
+    # ---------- Handheld ----------
+    "Handheld Electronic Game":                     "Game & Watch.xml",
+
+    "Nintendo - Game Boy":                          "Nintendo Game Boy.xml",
+    "Nintendo - Game Boy Color":                    "Nintendo Game Boy Color.xml",
+    "Nintendo - Game Boy Advance":                  "Nintendo Game Boy Advance.xml",
+    "Nintendo - Nintendo DS":                       "Nintendo DS.xml",
+    "Nintendo - Nintendo 3DS":                      "Nintendo 3DS.xml",
+
+    # ---------- Nintendo Consoles ----------
+    "Nintendo - Nintendo Entertainment System":     "Nintendo Entertainment System.xml",
+    "Nintendo - Super Nintendo Entertainment System":"Super Nintendo.xml",
+    "Nintendo - Nintendo Virtual Boy":              "Nintendo Virtual Boy.xml",
+    "Nintendo - Nintendo 64":                       "Nintendo 64.xml",
+    "Nintendo - GameCube":                          "Nintendo GameCube.xml",
+    "Nintendo - Wii":                               "Nintendo Wii.xml",
+
+    # ---------- Sega ----------
+    "Sega - Master System - Mark III":              "Sega Master System.xml",
+    "Sega - Game Gear":                             "Sega Game Gear.xml",
+    "Sega - Mega Drive - Genesis":                  "Sega Mega Drive.xml",
+    "Sega - Mega-CD - Sega CD":                     "Sega CD.xml",
+    "Sega - 32X":                                   "Sega 32X.xml",
+    "Sega - Saturn":                                "Sega Saturn.xml",
+    "Sega - Dreamcast":                             "Sega Dreamcast.xml",
+
+    # ---------- Sony ----------
+    "Sony - PlayStation":                           "Sony Playstation.xml",
+    "Sony - PlayStation 2":                         "Sony Playstation 2.xml",
+    "Sony - PlayStation Portable":                  "Sony PlayStation Portable.xml",
 }
+
 
 # ---------------- RetroArch ----------------
 
-RETROARCH_DIR = r"H:\LaunchBox\!Emulators\RetroArch"
+RETROARCH_DIR = "H:\\LaunchBox\\!Emulators\\RetroArch"
 RETROARCH_CFG_DIR = os.path.join(RETROARCH_DIR, "config")
 RETROARCH_PLAYLIST_DIR = os.path.join(RETROARCH_DIR, "playlists")
 RETROARCH_LOG_DIR = os.path.join(RETROARCH_PLAYLIST_DIR, "logs")
 
-GAMES_DIR = os.path.join(RETROARCH_DIR, "!games")
+GAMES_DIR = os.path.join(RETROARCH_DIR, "games")
 
 ARC_DIR  = os.path.join(GAMES_DIR, "FBNeo - Arcade Games")
 
 NGW_DIR  = os.path.join(GAMES_DIR, "Handheld Electronic Game")
-GBC_DIR  = os.path.join(GAMES_DIR, "Nintendo - Game Boy")
+GB_DIR  = os.path.join(GAMES_DIR, "Nintendo - Game Boy")
+GBC_DIR  = os.path.join(GAMES_DIR, "Nintendo - Game Boy Color")
 GBA_DIR  = os.path.join(GAMES_DIR, "Nintendo - Game Boy Advance")
 NDS_DIR  = os.path.join(GAMES_DIR, "Nintendo - Nintendo DS")
 N3DS_DIR = os.path.join(GAMES_DIR, "Nintendo - Nintendo 3DS")
@@ -76,13 +89,15 @@ PSP_DIR  = os.path.join(GAMES_DIR, "Sony - PlayStation Portable")
 
 # ---------------- Dolphin ----------------
 
-DOLPHIN_DIR = r"H:\LaunchBox\!Emulators\Dolphin"
+DOLPHIN_DIR = "H:\\LaunchBox\\!Emulators\\Dolphin"
 DOLPHIN_TOOL = os.path.join(DOLPHIN_DIR, "DolphinTool.exe")
 DOLPHIN_PLAYTIME = os.path.join(DOLPHIN_DIR, "User", "Config", "TimePlayed.ini")
 
 # ---------------- PCSX2 ----------------
 
-PCSX2_DIR = r"H:\LaunchBox\!Emulators\PCSX2"
+PCSX2_DIR = "H:\\LaunchBox\\!Emulators\\PCSX2"
 PCSX2_PLAYTIME = os.path.join(PCSX2_DIR, "inis", "playtime.dat")
 
+# ---------------- Minecraft ----------------
 
+MINECRF_DIR = r"%APPDATA%\.minecraft"
