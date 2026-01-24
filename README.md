@@ -7,3 +7,7 @@ A script designed to do 4 things
 
 Make sure to download the latest verion of GameID.py for the higher speed and hitrate. 
 https://github.com/niemasd/GameID/releases/
+
+Supports accumulated playtime for existing Minecraft Java savefiles.
+Supports accumulated playtime World of Warcraft in 3 groups. Retail, Classic Era and Classic Progression.
+-requires either of theese addons installed: Broker PlayedTime, SavedInstances or Playtime (retail only)

@@ -20,11 +20,7 @@ init()
 
 def resolve_scanner():
     """
-    Returns (executable, scanner_path)
-    Works for:
-      - GameIndex.py → game_scanner.py
-      - GameIndex.py → game_scanner.exe
-      - GameIndex.exe → game_scanner.exe
+    Returns (executable, scanner_path) or (None, None) if unavailable
     """
     base = os.path.dirname(sys.executable if getattr(sys, "frozen", False) else __file__)
 
@@ -37,17 +33,15 @@ def resolve_scanner():
     if os.path.isfile(py):
         return sys.executable, py
 
-    raise RuntimeError("game_scanner not found (exe or py)")
+    return None, None
 
 SCANNER_EXEC, SCANNER_SCRIPT = resolve_scanner()
   
 def run_scanner_process(env=None, args=None):
-    """
-    Run game_scanner in a way that works for:
-      - GameIndex.py + game_scanner.py
-      - GameIndex.py + game_scanner.exe
-      - GameIndex.exe + game_scanner.exe
-    """
+    if not SCANNER_EXEC:
+        print("(game_scanner not present — skipping scan)")
+        return
+
     cmd = []
 
     if SCANNER_SCRIPT:
@@ -59,6 +53,7 @@ def run_scanner_process(env=None, args=None):
         cmd.extend(args)
 
     subprocess.run(cmd, env=env)
+
 
 CONFIG_FILE = "specialconfig.txt" if os.path.exists("specialconfig.txt") else "config.txt"
 
@@ -1075,6 +1070,76 @@ def load_minecraft_playtime():
 
     return seconds, last_played
 
+# ---------- World of Warcraft ----------
+
+def load_wow_playtime(root):
+    if not root or not os.path.isdir(root):
+        return None
+
+    totals = []
+
+    # ---------- SavedInstances.lua ----------
+    si_path = os.path.join(root, "SavedInstances.lua")
+    if os.path.exists(si_path):
+        total = 0
+        pat = re.compile(r'\["PlayedTotal"\]\s*=\s*(\d+)')
+        try:
+            with open(si_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    m = pat.search(line)
+                    if m:
+                        total += int(m.group(1))
+        except:
+            total = 0
+
+        if total > 0:
+            totals.append((total, os.path.getmtime(si_path)))
+
+    # ---------- Playtime.lua ----------
+    pt_path = os.path.join(root, "Playtime.lua")
+    if os.path.exists(pt_path):
+        total = 0
+        pat = re.compile(r'\]\s*=\s*(\d+)')
+        try:
+            with open(pt_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    m = pat.search(line)
+                    if m:
+                        total += int(m.group(1))
+        except:
+            total = 0
+
+        if total > 0:
+            totals.append((total, os.path.getmtime(pt_path)))
+
+    # ---------- Broker_PlayedTime.lua ----------
+    bpt_path = os.path.join(root, "Broker_PlayedTime.lua")
+    if os.path.exists(bpt_path):
+        total = 0
+        pat = re.compile(r'\["timePlayed"\]\s*=\s*(\d+)')
+        try:
+            with open(bpt_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    m = pat.search(line)
+                    if m:
+                        total += int(m.group(1))
+        except:
+            total = 0
+
+        if total > 0:
+            totals.append((total, os.path.getmtime(bpt_path)))
+
+    if not totals:
+        return None
+
+    # Highest reported playtime wins
+    seconds, mtime = max(totals, key=lambda x: x[0])
+
+    last_played = datetime.datetime.fromtimestamp(
+        mtime
+    ).strftime("%Y-%m-%d %H:%M:%S")
+
+    return seconds, last_played
 
 # ============================================================
 # ===================== RENAME ENGINE ========================
@@ -1476,15 +1541,22 @@ def cmd_export_playtime():
     print("Loading playtime sources...")
 
     rows = load_local()
+
     if not rows:
-        print("local_games.txt is empty or missing")
-        return
+        if SCANNER_EXEC:
+            print("local_games.txt is empty or missing")
+            return
+        else:
+            rows = []
 
     ra = load_retroarch_playtime()
     pcsx2 = load_pcsx2_playtime()
     dolphin = load_dolphin_playtime()
     lb = load_launchbox_lastplayed()
     minecraft = load_minecraft_playtime()
+    wow_retail = load_wow_playtime(SETUP.get("WOWRE_DIR"))
+    wow_era    = load_wow_playtime(SETUP.get("WOWERA_DIR"))
+    wow_classic = load_wow_playtime(SETUP.get("WOWCLA_DIR"))
 
     CODEWORDS = [
         "(patched)", "[patched]", "(hack)", "[hack]",
@@ -1605,6 +1677,73 @@ def cmd_export_playtime():
 
             print(row_color)
             out.append(row_plain)
+
+    # ---------- World of Warcraft (Retail) ----------
+    if wow_retail:
+        seconds, last_played = wow_retail
+
+        if seconds >= 500 or PRINT_ALL:
+            row_plain = (
+                "PC - World of Warcraft | World of Warcraft | WOW-RETAIL | "
+                f"{seconds}s | {last_played} | Wow.exe"
+            )
+
+            row_color = (
+                f"PC - World of Warcraft"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} World of Warcraft"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} WOW-RETAIL"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {seconds}s"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {last_played}"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} Wow.exe"
+            )
+
+            print(row_color)
+            out.append(row_plain)
+
+    # ---------- World of Warcraft (Classic Era / Events) ----------
+    if wow_era:
+        seconds, last_played = wow_era
+
+        if seconds >= 500 or PRINT_ALL:
+            row_plain = (
+                "PC - World of Warcraft | World of Warcraft Classic Era | WOW-CLASSIC-ERA | "
+                f"{seconds}s | {last_played} | WowClassic.exe"
+            )
+
+            row_color = (
+                f"PC - World of Warcraft"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} World of Warcraft Classic Era"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} WOW-CLASSIC-ERA"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {seconds}s"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {last_played}"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} WowClassic.exe"
+            )
+
+            print(row_color)
+            out.append(row_plain)
+
+    # ---------- World of Warcraft (Classic Progression) ----------
+    if wow_classic:
+        seconds, last_played = wow_classic
+
+        if seconds >= 500 or PRINT_ALL:
+            row_plain = (
+                "PC - World of Warcraft | World of Warcraft Classic Progression | WOW-CLASSIC | "
+                f"{seconds}s | {last_played} | WowClassic.exe"
+            )
+
+            row_color = (
+                f"PC - World of Warcraft"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} World of Warcraft Classic Progression"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} WOW-CLASSIC"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {seconds}s"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {last_played}"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} WowClassic.exe"
+            )
+
+            print(row_color)
+            out.append(row_plain)
+
 
     # ---------- Emit results ----------
     if PRINT_ALL:
@@ -1960,9 +2099,9 @@ Commands:
 
 def main():
     # --------------------------------------------------
-    # Ensure local_games.txt exists
+    # Ensure local_games.txt exists (scanner only)
     # --------------------------------------------------
-    if not os.path.exists(LOCAL_DB):
+    if SCANNER_EXEC and not os.path.exists(LOCAL_DB):
         print("local_games.txt not found. Running game scanner...")
         run_scanner_process()
 

@@ -101,3 +101,9 @@ PCSX2_PLAYTIME = os.path.join(PCSX2_DIR, "inis", "playtime.dat")
 # ---------------- Minecraft ----------------
 
 MINECRF_DIR = r"%APPDATA%\.minecraft"
+
+# ---------------- World of Warcraft ----------------
+
+WOWRE_DIR = r"G:\World of Warcraft\_retail_\WTF\Account\<account>\SavedVariables"
+WOWERA_DIR = r"G:\World of Warcraft\_classic_era_\WTF\Account\<account>\SavedVariables"
+WOWCLA_DIR = r"G:\World of Warcraft\_classic_\WTF\Account\<account>\SavedVariables"
