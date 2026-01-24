@@ -18,6 +18,48 @@ init()
 # ========================== SETUP ===========================
 # ============================================================
 
+def resolve_scanner():
+    """
+    Returns (executable, scanner_path)
+    Works for:
+      - GameIndex.py → game_scanner.py
+      - GameIndex.py → game_scanner.exe
+      - GameIndex.exe → game_scanner.exe
+    """
+    base = os.path.dirname(sys.executable if getattr(sys, "frozen", False) else __file__)
+
+    exe = os.path.join(base, "game_scanner.exe")
+    py  = os.path.join(base, "game_scanner.py")
+
+    if os.path.isfile(exe):
+        return exe, None
+
+    if os.path.isfile(py):
+        return sys.executable, py
+
+    raise RuntimeError("game_scanner not found (exe or py)")
+
+SCANNER_EXEC, SCANNER_SCRIPT = resolve_scanner()
+  
+def run_scanner_process(env=None, args=None):
+    """
+    Run game_scanner in a way that works for:
+      - GameIndex.py + game_scanner.py
+      - GameIndex.py + game_scanner.exe
+      - GameIndex.exe + game_scanner.exe
+    """
+    cmd = []
+
+    if SCANNER_SCRIPT:
+        cmd = [SCANNER_EXEC, SCANNER_SCRIPT]
+    else:
+        cmd = [SCANNER_EXEC]
+
+    if args:
+        cmd.extend(args)
+
+    subprocess.run(cmd, env=env)
+
 CONFIG_FILE = "specialconfig.txt" if os.path.exists("specialconfig.txt") else "config.txt"
 
 def load_setup_minimal(path):
@@ -255,7 +297,7 @@ CODEWORDS = [
 LOCAL_DB         = "local_games.txt"
 HISTORY          = "history.txt"
 PLAYTIME_EXPORT  = "playtime_export.txt"
-SCANNER          = "game_scanner.py"
+SCANNER_EXEC, SCANNER_SCRIPT = resolve_scanner()
 
 PRINT_ALL = bool(SETUP.get("PRINT_ALL", False))
 
@@ -642,7 +684,7 @@ def replace_lines_in_file(path, replacements):
 def load_retroarch_playtime():
     out = {}
 
-    logs_root = os.path.join(RETROARCH_PLAYLIST_DIR, "logs")
+    logs_root = RETROARCH_LOG_DIR
     if not os.path.isdir(logs_root):
         return out
 
@@ -1158,6 +1200,21 @@ def rename_save_files(old_file, new_file):
                     if not os.path.exists(dst):
                         os.rename(src, dst)
 
+# ---------- Log files ----------
+def rename_retroarch_logs(old_file, new_file):
+    oldbase = os.path.splitext(old_file)[0]
+    newbase = os.path.splitext(new_file)[0]
+
+    if not os.path.isdir(RETROARCH_LOG_DIR):
+        return
+
+    for dirpath, _, files in os.walk(RETROARCH_LOG_DIR):
+        for fname in files:
+            if fname == oldbase + ".lrtl":
+                src = os.path.join(dirpath, fname)
+                dst = os.path.join(dirpath, newbase + ".lrtl")
+                if not os.path.exists(dst):
+                    os.rename(src, dst)
 
 # ---------- CUE rewriting ----------
 def rewrite_cue_file(cue_path, oldBase, newBase):
@@ -1217,12 +1274,6 @@ def parse_seconds(value):
     except:
         return 0
 
-def validate_row(row):
-    parts = [p.strip() for p in row.split("|")]
-    if len(parts) != 6:
-        raise ValueError("Invalid row: " + row)
-    return parts
-
 def build_modify_plans(old_lines, new_lines, local_rows, play_rows):
     def parse(row):
         parts = [x.strip() for x in row.split("|")]
@@ -1249,37 +1300,74 @@ def build_modify_plans(old_lines, new_lines, local_rows, play_rows):
         op, ot, og, opt, olp, of = parse(old)
         np, nt, ng, npt, nlp, nf = parse(new)
 
+        # Identity (platform / title / gameid) must match
         if (op, ot, og) != (np, nt, ng):
-            raise RuntimeError("Identity change not allowed:\n" + old + "\n" + new)
+            raise RuntimeError(
+                "Identity change not allowed:\n"
+                + old + "\n" + new
+            )
 
         key = (op, ot, og, of)
         if key not in local_map:
-            raise RuntimeError("Original not found in local_games.txt:\n" + old)
+            raise RuntimeError(
+                "Original not found in local_games.txt:\n" + old
+            )
 
-        # ---- local_games.txt ----
-        replacements_local[local_map[key]] = f"{op} | {ot} | {og} | {nf}"
+        system = PLATFORM_TO_SYSTEM.get(op)
 
-        # ---- playtime_export.txt ----
+        # --------------------------------------------------
+        # 🚫 HARD BLOCK: MAME-based systems
+        # --------------------------------------------------
+        if system in ("ARCADE", "GW"):
+            if ot != nt:
+                raise RuntimeError(
+                    f"Title rename is not allowed for {op} (MAME-based system)"
+                )
+
+            if of != nf:
+                raise RuntimeError(
+                    f"ROM rename is not allowed for {op} (MAME-based system)"
+                )
+
+        # --------------------------------------------------
+        # local_games.txt
+        # --------------------------------------------------
+        replacements_local[local_map[key]] = (
+            f"{op} | {ot} | {og} | {nf}"
+        )
+
+        # --------------------------------------------------
+        # playtime_export.txt
+        # --------------------------------------------------
         old_play = play_map.get(key)
         if old_play:
             if not npt and not nlp:
                 _, _, _, pt, lp, _ = parse(old_play)
                 npt, nlp = pt, lp
-            replacements_play[old_play] = f"{op} | {ot} | {og} | {npt} | {nlp} | {nf}"
+
+            replacements_play[old_play] = (
+                f"{op} | {ot} | {og} | {npt} | {nlp} | {nf}"
+            )
         else:
             if npt or nlp:
-                replacements_play[f"{op} | {ot} | {og} | 0 |  | {of}"] = \
-                                  f"{op} | {ot} | {og} | {npt} | {nlp} | {nf}"
+                replacements_play[
+                    f"{op} | {ot} | {og} | 0 |  | {of}"
+                ] = (
+                    f"{op} | {ot} | {og} | {npt} | {nlp} | {nf}"
+                )
 
-        # ---- filename change ----
+        # --------------------------------------------------
+        # Filename rename (non-MAME only)
+        # --------------------------------------------------
         if of != nf:
             rom_dir = os.path.join(GAMES_DIR, op)
             rename_jobs.append((rom_dir, of, nf))
 
-        # ---- playtime propagation ----
+        # --------------------------------------------------
+        # Playtime propagation
+        # --------------------------------------------------
         if (npt or nlp) or (opt != npt or olp != nlp):
             seconds = parse_seconds(npt)
-
             time_jobs.append((op, og, nf, seconds, nlp))
 
     return replacements_local, replacements_play, rename_jobs, time_jobs
@@ -1321,8 +1409,7 @@ def run_scanner(force=False):
     env = os.environ.copy()
     if force:
         env["FORCE_RESCAN"] = "1"
-    subprocess.run(["python", SCANNER], env=env)
-
+    run_scanner_process(env=env)
 
 def cmd_rescan():
     run_scanner(force=True)
@@ -1503,8 +1590,8 @@ def cmd_export_playtime():
 
         if seconds >= 500 or PRINT_ALL:
             row_plain = (
-                "PC - Minecraft | Minecraft | MINECRAFT | "
-                f"{seconds}s | {last_played} | worlds"
+                "PC - Minecraft | Minecraft Java Edition | MINECRAFT-JAVA | "
+                f"{seconds}s | {last_played} | Minecraft.exe"
             )
 
             row_color = (
@@ -1536,8 +1623,7 @@ def cmd_export_playtime():
 
 def cmd_sync():
     run_scanner()
-    subprocess.run(["python", SCANNER, "--sync"])
-
+    run_scanner_process(args=["--sync"])
 
 # ---------- Modify ----------
 
@@ -1546,6 +1632,7 @@ def apply_rename_jobs(rename_jobs):
         plan = build_rom_rename_plan(rom_dir, old_file, new_file)
         apply_renames(plan)
         rename_save_files(old_file, new_file)
+        rename_retroarch_logs(old_file, new_file)
 
         if old_file.lower().endswith(".cue"):
             rewrite_cue_file(
@@ -1622,8 +1709,11 @@ def apply_rename_jobs(rename_jobs):
                 newStem
             )
 
-def cmd_modify():
-    print("Paste OLD rows. Finish with an empty line.")
+def cmd_modify(arg=None):
+    if arg:
+        return
+        
+    print("Paste OLD rows from playtime_export.txt. Finish with an empty line.")
     old_lines = []
     while True:
         line = input()
@@ -1631,7 +1721,7 @@ def cmd_modify():
             break
         old_lines.append(line.strip())
 
-    print("\nPaste NEW rows.")
+    print("\nPaste NEW edited rows.")
     new_lines = []
     while len(new_lines) < len(old_lines):
         line = input()
@@ -1850,8 +1940,8 @@ COMMANDS = {
     "rescan": cmd_rescan,
     "sync": cmd_sync,
     "modify": cmd_modify,
-    "revert": cmd_revert,
     "history": show_history,
+    "revert": cmd_revert,
     "backup": cmd_backup,
     "help": lambda: print("""
 Commands:
@@ -1859,10 +1949,10 @@ Commands:
   help            - Show this screen  
   check paths     - Verify all emulator and platform paths
   rescan          - Refresh game library
-  sync            - Sync playtime into LaunchBox
-  modify          - Batch edit titles / IDs / playtime
-  revert <n>      - Undo or redo a modification
+  sync            - Sync playtime from emulators into LaunchBox
+  modify          - Batch edit playtime | last played | filename
   history         - Show modification log
+  revert <n>      - Undo or redo a modification (check history)
   backup          - Snapshot all emulator + LaunchBox data
   exit            - Quit
 """)
@@ -1874,7 +1964,7 @@ def main():
     # --------------------------------------------------
     if not os.path.exists(LOCAL_DB):
         print("local_games.txt not found. Running game scanner...")
-        subprocess.run([sys.executable, SCANNER])
+        run_scanner_process()
 
     # --------------------------------------------------
     # Always refresh playtime on startup

@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import time
 import zlib
 import shlex
@@ -13,6 +14,17 @@ init()
 # ============================================================
 # ========================== SETUP ===========================
 # ============================================================
+
+def resource_path(relative_path):
+    """
+    Get absolute path to resource, works for dev and for PyInstaller EXE
+    """
+    if getattr(sys, 'frozen', False):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.dirname(__file__), relative_path)
+
+BASE_DIR = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__)
+os.chdir(BASE_DIR)
 
 CONFIG_FILE = "specialconfig.txt" if os.path.exists("specialconfig.txt") else "config.txt"
 
@@ -269,7 +281,7 @@ DB = {}
 
 parser = configparser.ConfigParser(interpolation=None)
 
-with open("database.txt", "r", encoding="utf-8") as f:
+with open(resource_path("database.txt"), "r", encoding="utf-8") as f:
     lines = f.readlines()
 
 # Skip non-data lines before first section header
@@ -335,7 +347,7 @@ def lookup_db_title(game_id, system):
 def run_gameid(path, system):
     try:
         p = subprocess.Popen(
-            ["python", GAMEID_SCRIPT],
+            [sys.executable, GAMEID_SCRIPT],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -528,7 +540,10 @@ def scan_ds(path):
 # ======================= NINTENDO 3DS =======================
 # ============================================================
 
-def load_3ds_serial_database(path="3dsserialdatabase.txt"):
+def load_3ds_serial_database(path=None):
+    if path is None:
+        path = resource_path("3dsserialdatabase.txt")
+
     db = {}
 
     if not os.path.exists(path):
