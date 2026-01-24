@@ -6,6 +6,7 @@ import zlib
 import shlex
 import struct
 import string
+import argparse
 import subprocess
 import configparser
 from colorama import Fore, Style, init
@@ -273,7 +274,7 @@ def scan_override(filename):
 # ================== GAMEID + FALLBACK CORE =================
 # ============================================================
 
-GAMEID_SCRIPT = "GameID.py"
+GAMEID_SCRIPT = resource_path("GameID.py")
 SUPPORTED_GAMEID_EXTS = (".iso", ".cue", ".bin", ".gen", ".md", ".n64", ".z64", ".gba", ".gbc", ".gb", ".sfc", ".smc", ".nes")
 
 # ---------- database.txt ----------
@@ -346,15 +347,28 @@ def lookup_db_title(game_id, system):
 # ---------- run GameID.py ----------
 def run_gameid(path, system):
     try:
+        if getattr(sys, "frozen", False):
+            # EXE mode → call GameID.exe
+            cmd = [os.path.join(os.path.dirname(sys.executable), "GameID.exe")]
+        else:
+            # PY mode → call GameID.py
+            cmd = [sys.executable, GAMEID_SCRIPT]
+
         p = subprocess.Popen(
-            [sys.executable, GAMEID_SCRIPT],
+            cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
         )
-        out, _ = p.communicate(f"{path}\n{system}\n")
-        return out
+
+        # EXACTLY what you typed manually
+        stdin_data = f"{path}\n{system}\n"
+
+        out, err = p.communicate(stdin_data)
+
+        return out or ""
+
     except Exception:
         return ""
 
@@ -1547,7 +1561,7 @@ SYSTEMS = {
     "ARCADE": {
         "display": "FBNeo - Arcade Games",
         "root": _setup["ARC_DIR"],
-        "exts": (".zip", ".7z"),
+        "exts": (".zip",),
         "db_sections": ["FBNeo - Arcade Games"],
         "id_pattern": r"[a-z0-9_]+",
         "gameid": (None, False, False, False),
@@ -1557,7 +1571,7 @@ SYSTEMS = {
     "GW": {
         "display": "Handheld Electronic Game",
         "root": _setup["NGW_DIR"],
-        "exts": (".zip", ".7z"),
+        "exts": (".zip",),
         "db_sections": ["Handheld Electronic Game"],
         "id_pattern": r"[A-Z]{2}-[0-9]{2,3}[A-Z]?",
         "gameid": (None, False, False, False),
@@ -1793,12 +1807,12 @@ if same_path(gb_root, gbc_root):
 
 
 GAMEID_RE = {}
-for sys, cfg in SYSTEMS.items():
+for sys_key, cfg in SYSTEMS.items():
     pat = cfg["id_pattern"]
     if not pat:
         continue
         
-    GAMEID_RE[sys] = re.compile(rf"(?<![A-Z0-9])({pat})(?![A-Z0-9])")
+    GAMEID_RE[sys_key] = re.compile(rf"(?<![A-Z0-9])({pat})(?![A-Z0-9])")
 
 
 # ============================================================
