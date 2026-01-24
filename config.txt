@@ -7,6 +7,9 @@ import os
 # If True, prints games that have less then 5 minutes playtime
 PRINT_ALL = True 
 
+# If True, show playtime in seconds rather then h m
+PLAYTIME_SEC = False 
+
 # ---------------- LaunchBox ----------------
 
 LAUNCHBOX_DIR = "C:\\LaunchBox"

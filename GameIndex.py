@@ -90,8 +90,6 @@ def load_setup(path):
     exec(code, safe, env)
     return env
 
-PRINT_ALL = False # If True print every game, even if no playtime.
-
 # ============================================================
 # =============== VERIFY / REPAIR CORE PATHS =================
 # ============================================================
@@ -673,6 +671,30 @@ def replace_lines_in_file(path, replacements):
 # ============================================================
 # ===================== PLAYTIME READERS =====================
 # ============================================================
+
+def format_playtime(seconds):
+    """
+    PLAYTIME_SEC = True  -> "123456s"
+    PLAYTIME_SEC = False -> "1234h 56m 07s"
+    """
+    try:
+        seconds = int(seconds)
+    except:
+        seconds = 0
+
+    show_seconds = SETUP.get("PLAYTIME_SEC", True)
+
+    if show_seconds:
+        return f"{seconds}s"
+
+    h = seconds // 3600
+    m = (seconds % 3600) // 60
+    s = seconds % 60
+
+    # Thousands-separated hours using dot
+    h_str = f"{h:,}".replace(",", "")
+
+    return f"{h_str}h {m:02}m {s:02}s"
 
 # ---------- RetroArch ----------
 
@@ -1329,15 +1351,58 @@ def replace_stem_in_tree(root, oldStem, newStem, extensions=None, *_):
 # ============================================================
 
 def parse_seconds(value):
+    """
+    Parse playtime into seconds.
+
+    Accepted formats:
+      - 123456
+      - 123456s
+      - 1234h
+      - 1234h 56m
+      - 1234h 56m 07s
+      - 1.234h 56m 07s   (thousands-separated hours)
+    """
     if not value:
         return 0
-    value = value.strip().lower()
-    if value.endswith("s"):
-        value = value[:-1]
-    try:
-        return int(value)
-    except:
-        return 0
+
+    v = value.strip().lower()
+
+    # ---------- pure seconds ----------
+    if v.endswith("s") and v[:-1].isdigit():
+        return int(v[:-1])
+
+    if v.isdigit():
+        return int(v)
+
+    # ---------- h / m / s format ----------
+    h = m = s = 0
+
+    # hours (allow thousands separators)
+    mh = re.search(r'([\d\.]+)\s*h', v)
+    if mh:
+        try:
+            h = int(mh.group(1).replace(".", ""))
+        except:
+            h = 0
+
+    mm = re.search(r'(\d+)\s*m', v)
+    if mm:
+        try:
+            m = int(mm.group(1))
+        except:
+            m = 0
+
+    ms = re.search(r'(\d+)\s*s', v)
+    if ms:
+        try:
+            s = int(ms.group(1))
+        except:
+            s = 0
+
+    if h or m or s:
+        return h * 3600 + m * 60 + s
+
+    return 0
 
 def build_modify_plans(old_lines, new_lines, local_rows, play_rows):
     def parse(row):
@@ -1611,7 +1676,7 @@ def cmd_export_playtime():
             f"{platform}"
             f"{sep_plain}{title}"
             f"{sep_plain}{game_id}"
-            f"{sep_plain}{seconds}s"
+            f"{sep_plain}{format_playtime(seconds)}"
             f"{sep_plain}{last_played}"
             f"{sep_plain}{file}"
         )
@@ -1620,7 +1685,7 @@ def cmd_export_playtime():
             f"{platform}"
             f"{sep_color}{title}"
             f"{sep_color}{game_id}"
-            f"{sep_color}{seconds}s"
+            f"{sep_color}{format_playtime(seconds)}"
             f"{sep_color}{last_played}"
             f"{sep_color}{file}"
         )
@@ -1663,14 +1728,14 @@ def cmd_export_playtime():
         if seconds >= 500 or PRINT_ALL:
             row_plain = (
                 "PC - Minecraft | Minecraft Java Edition | MINECRAFT-JAVA | "
-                f"{seconds}s | {last_played} | Minecraft.exe"
+                f"{format_playtime(seconds)} | {last_played} | Minecraft.exe"
             )
 
             row_color = (
                 f"PC - Minecraft"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} Minecraft Java Edition"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} MINECRAFT-JAVA"
-                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {seconds}s"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {format_playtime(seconds)}"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {last_played}"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} Minecraft.exe"
             )
@@ -1685,14 +1750,14 @@ def cmd_export_playtime():
         if seconds >= 500 or PRINT_ALL:
             row_plain = (
                 "PC - World of Warcraft | World of Warcraft | WOW-RETAIL | "
-                f"{seconds}s | {last_played} | Wow.exe"
+                f"{format_playtime(seconds)} | {last_played} | Wow.exe"
             )
 
             row_color = (
                 f"PC - World of Warcraft"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} World of Warcraft"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} WOW-RETAIL"
-                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {seconds}s"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {format_playtime(seconds)}"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {last_played}"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} Wow.exe"
             )
@@ -1707,14 +1772,14 @@ def cmd_export_playtime():
         if seconds >= 500 or PRINT_ALL:
             row_plain = (
                 "PC - World of Warcraft | World of Warcraft Classic Era | WOW-CLASSIC-ERA | "
-                f"{seconds}s | {last_played} | WowClassic.exe"
+                f"{format_playtime(seconds)} | {last_played} | WowClassic.exe"
             )
 
             row_color = (
                 f"PC - World of Warcraft"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} World of Warcraft Classic Era"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} WOW-CLASSIC-ERA"
-                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {seconds}s"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {format_playtime(seconds)}"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {last_played}"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} WowClassic.exe"
             )
@@ -1729,14 +1794,14 @@ def cmd_export_playtime():
         if seconds >= 500 or PRINT_ALL:
             row_plain = (
                 "PC - World of Warcraft | World of Warcraft Classic Progression | WOW-CLASSIC | "
-                f"{seconds}s | {last_played} | WowClassic.exe"
+                f"{format_playtime(seconds)} | {last_played} | WowClassic.exe"
             )
 
             row_color = (
                 f"PC - World of Warcraft"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} World of Warcraft Classic Progression"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} WOW-CLASSIC"
-                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {seconds}s"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {format_playtime(seconds)}"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {last_played}"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} WowClassic.exe"
             )
