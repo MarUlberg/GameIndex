@@ -17,6 +17,9 @@ LAUNCHBOX_DATA_DIR = os.path.join(LAUNCHBOX_DIR, "Data", "Platforms")
 
 # ---------------- LaunchBox Platform XML ----------------
 LAUNCHBOX_PLATFORMS = {
+    # ---------- Windows ----------
+    "Windows":                        				"Windows.xml",
+	
     # ---------- Arcade ----------
     "FBNeo - Arcade Games":                         "Arcade.xml",
 
