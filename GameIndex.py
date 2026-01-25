@@ -859,6 +859,22 @@ def load_launchbox_lastplayed():
 # ===================== PLAYTIME WRITERS =====================
 # ============================================================
 
+def indent_xml(elem, level=0):
+    """
+    In-place pretty printer for ElementTree.
+    Ensures each element (including </Game>) is on its own line.
+    """
+    i = "\n" + level * "  "
+    if len(elem):
+        if not elem.text or not elem.text.strip():
+            elem.text = i + "  "
+        for e in elem:
+            indent_xml(e, level + 1)
+        if not e.tail or not e.tail.strip():
+            e.tail = i
+    if level and (not elem.tail or not elem.tail.strip()):
+        elem.tail = i
+
 # ---------- RetroArch ----------
 
 def write_retroarch_time(filename, seconds, lastplayed):
@@ -888,7 +904,79 @@ def write_retroarch_time(filename, seconds, lastplayed):
 
 # ---------- LaunchBox ----------
 
-def write_launchbox_time(platform, gameid, filename, seconds, lastplayed):
+def write_launchbox_windows_time(title_candidates, seconds, lastplayed):
+    """
+    Write playtime / last-played to LaunchBox Windows.xml
+    using Title-based matching.
+    """
+    xmlfile = LAUNCHBOX_PLATFORMS.get("Windows")
+    if not xmlfile:
+        return
+
+    path = os.path.join(LAUNCHBOX_DATA_DIR, xmlfile)
+    if not os.path.exists(path):
+        return
+
+    try:
+        tree = ET.parse(path)
+        root = tree.getroot()
+    except:
+        return
+
+    # --- normalize lastplayed ---
+    norm_lastplayed = ""
+    if lastplayed:
+        s = str(lastplayed).strip()
+        if s.isdigit():
+            try:
+                norm_lastplayed = datetime.datetime.fromtimestamp(
+                    int(s)
+                ).strftime("%Y-%m-%dT%H:%M:%S")
+            except:
+                norm_lastplayed = ""
+        else:
+            if " " in s:
+                s = s.replace(" ", "T", 1)
+            norm_lastplayed = s
+
+    titles_lower = [t.lower() for t in title_candidates]
+    changed = False
+
+    for g in root.findall("Game"):
+        title = g.findtext("Title", "")
+        if not title:
+            continue
+
+        if title.lower() not in titles_lower:
+            continue
+
+        if seconds:
+            pt = g.find("PlayTime")
+            if pt is None:
+                pt = ET.SubElement(g, "PlayTime")
+            pt.text = str(seconds)
+            changed = True
+
+        if norm_lastplayed:
+            lp = g.find("LastPlayedDate")
+            if lp is None:
+                lp = ET.SubElement(g, "LastPlayedDate")
+            lp.text = norm_lastplayed
+            changed = True
+
+        break  # only ever update one Windows entry
+
+    if changed:
+        indent_xml(root)
+        tree.write(path, encoding="utf-8", xml_declaration=True)
+
+def write_launchbox_time(platform, _gameid, filename, seconds, lastplayed):
+    """
+    Write playtime / last-played data to LaunchBox XML.
+
+    Matching is performed by ROM filename (ApplicationPath),
+    NOT by GameID. GameID is ignored by design.
+    """
     xmlfile = LAUNCHBOX_PLATFORMS.get(platform)
     if not xmlfile:
         return
@@ -906,9 +994,29 @@ def write_launchbox_time(platform, gameid, filename, seconds, lastplayed):
     romname = os.path.basename(filename).lower()
     changed = False
 
+    # --- normalize lastplayed ---
+    norm_lastplayed = ""
+    if lastplayed:
+        s = str(lastplayed).strip()
+        if s.isdigit():
+            try:
+                norm_lastplayed = datetime.datetime.fromtimestamp(
+                    int(s)
+                ).strftime("%Y-%m-%dT%H:%M:%S")
+            except:
+                norm_lastplayed = ""
+        else:
+            if " " in s:
+                s = s.replace(" ", "T", 1)
+            norm_lastplayed = s
+
     for g in root.findall("Game"):
-        app = g.findtext("ApplicationPath", "").lower()
-        if romname not in app:
+        app = g.findtext("ApplicationPath", "")
+        if not app:
+            continue
+
+        app_base = os.path.basename(app).lower()
+        if app_base != romname:
             continue
 
         if seconds:
@@ -918,17 +1026,17 @@ def write_launchbox_time(platform, gameid, filename, seconds, lastplayed):
             pt.text = str(seconds)
             changed = True
 
-        if lastplayed:
+        if norm_lastplayed:
             lp = g.find("LastPlayedDate")
             if lp is None:
                 lp = ET.SubElement(g, "LastPlayedDate")
-            if " " in lastplayed:
-                lastplayed = lastplayed.replace(" ", "T", 1)
-            lp.text = lastplayed
+            lp.text = norm_lastplayed
             changed = True
 
     if changed:
+        indent_xml(root)
         tree.write(path, encoding="utf-8", xml_declaration=True)
+
 
 
 # ---------- Dolphin ----------
@@ -1826,8 +1934,63 @@ def cmd_export_playtime():
 # ---------- Sync ----------
 
 def cmd_sync():
-    run_scanner()
-    run_scanner_process(args=["--sync"])
+    """
+    Sync playtime and last-played data into LaunchBox XML ONLY.
+    No scanning. No exporting. No implicit side effects.
+    """
+    print("Syncing playtime to LaunchBox...")
+
+    rows = load_playtime_export()
+    if not rows:
+        print("No playtime data found. Run export first.")
+        return
+
+    wow_seconds = 0
+    wow_last = ""
+
+    for row in rows:
+        try:
+            platform, title, gameid, pt, lp, file = \
+                [x.strip() for x in row.split("|")]
+        except:
+            continue
+
+        seconds = parse_seconds(pt)
+
+        # ---------- Windows: Minecraft ----------
+        if platform == "PC - Minecraft":
+            write_launchbox_windows_time(
+                ["Minecraft: Java Edition", "Minecraft"],
+                seconds,
+                lp
+            )
+            continue
+
+        # ---------- Windows: World of Warcraft (merge) ----------
+        if platform == "PC - World of Warcraft":
+            wow_seconds += seconds
+            if lp and (not wow_last or lp > wow_last):
+                wow_last = lp
+            continue
+
+        # ---------- Normal LaunchBox platforms ----------
+        write_launchbox_time(
+            platform,
+            gameid,
+            file,
+            seconds,
+            lp
+        )
+
+    # ---------- Emit merged WoW ----------
+    if wow_seconds:
+        write_launchbox_windows_time(
+            ["World of Warcraft"],
+            wow_seconds,
+            wow_last
+        )
+
+    print("LaunchBox sync complete.")
 
 # ---------- Modify ----------
 
