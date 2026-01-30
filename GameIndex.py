@@ -15,6 +15,105 @@ from colorama import Fore, Style, init
 init()
 
 # ============================================================
+# ========== RETROARCH THUMBNAIL SANITIZATION POLICY =========
+# ============================================================
+
+# RetroArch thumbnails replace a small set of unsafe characters
+# with "_" when generating image filenames.
+#
+# IMPORTANT:
+# - This applies ONLY to thumbnail filenames
+# - ROMs, saves, logs, playlists, XML keep original characters
+# - Matching must treat sanitized and unsanitized names as equal
+
+RETROARCH_REJECTED_CHARS = '&/\\:*?"<>|'
+
+def sanitize_rom_filename(name):
+    """
+    Return the RetroArch thumbnail-safe version of a filename.
+
+    Used ONLY for thumbnail paths.
+    """
+    base, ext = os.path.splitext(name)
+
+    for ch in RETROARCH_REJECTED_CHARS:
+        base = base.replace(ch, "_")
+
+    return base + ext
+
+
+def normalize_filename_for_match(name, *, strip_ext=True):
+    """
+    Normalize filename for tolerant comparison.
+
+    Allows matching:
+        Foo & Bar
+        Foo _ Bar
+    """
+    name = sanitize_rom_filename(name)
+
+    if strip_ext:
+        name, _ = os.path.splitext(name)
+
+    return name.lower()
+
+
+def filenames_equivalent(a, b, *, strip_ext=True):
+    """
+    True if filenames should be considered the same
+    under thumbnail normalization rules.
+    """
+    return normalize_filename_for_match(a, strip_ext=strip_ext) == \
+           normalize_filename_for_match(b, strip_ext=strip_ext)
+
+
+def expand_multidisc_renames(rom_dir, old_file, new_file):
+    """
+    Expand Disc 1 rename across sibling discs.
+
+    - Disc numbers preserved
+    - Only base title changes
+    - Cue/bin safe
+    """
+    jobs = []
+
+    def sig(name):
+        n = name.lower()
+        m = re.search(r"\b(disc|disk|cd)\s*(\d+)\b", n)
+        disc = int(m.group(2)) if m else None
+        base = re.sub(r"\b(disc|disk|cd)\s*\d+\b", "", n)
+        base = re.sub(r"\s+", " ", base).strip()
+        return base, disc
+
+    old_base, old_disc = sig(old_file)
+    _, new_disc = sig(new_file)
+
+    if not old_disc or not new_disc:
+        return [(rom_dir, old_file, new_file)]
+
+    def replace_disc_number(template, disc_num):
+        def repl(m):
+            return f"{m.group(1)}{disc_num}"
+
+        return re.sub(
+            r"\b((?:disc|disk|cd)\s*)\d+\b",
+            repl,
+            template,
+            flags=re.I
+        )
+
+    for fname in os.listdir(rom_dir):
+        fbase, fdisc = sig(fname)
+
+        if fdisc is None or fbase != old_base:
+            continue
+
+        new_name = replace_disc_number(new_file, fdisc)
+        jobs.append((rom_dir, fname, new_name))
+
+    return jobs
+
+# ============================================================
 # ========================== SETUP ===========================
 # ============================================================
 
@@ -298,6 +397,7 @@ RETROARCH_DIR         = SETUP["RETROARCH_DIR"]
 RETROARCH_CFG_DIR     = SETUP["RETROARCH_CFG_DIR"]
 RETROARCH_PLAYLIST_DIR = SETUP["RETROARCH_PLAYLIST_DIR"]
 RETROARCH_LOG_DIR     = SETUP["RETROARCH_LOG_DIR"]
+RETROARCH_IMG_DIR = SETUP.get("RETROARCH_IMG_DIR")
 
 DOLPHIN_DIR      = SETUP["DOLPHIN_DIR"]
 DOLPHIN_PLAYTIME = SETUP["DOLPHIN_PLAYTIME"]
@@ -307,6 +407,7 @@ PCSX2_PLAYTIME   = SETUP["PCSX2_PLAYTIME"]
 
 LAUNCHBOX_DATA_DIR   = SETUP["LAUNCHBOX_DATA_DIR"]
 LAUNCHBOX_PLATFORMS  = SETUP["LAUNCHBOX_PLATFORMS"]
+LAUNCHBOX_IMG_DIR = SETUP.get("LAUNCHBOX_IMG_DIR")
 GAMES_DIR           = SETUP["GAMES_DIR"]
 
 
@@ -337,18 +438,6 @@ SYSTEMS = {
     "GB": {
         "platforms": [
             "Nintendo - Game Boy",
-        ],
-        "cores": [
-            "Gambatte",
-            "SameBoy",
-            "Gearboy",
-            "TGB Dual",
-        ],
-    },
-
-    "GBC": {
-        "platforms": [
-            "Nintendo - Game Boy Color",
         ],
         "cores": [
             "Gambatte",
@@ -569,6 +658,14 @@ PLATFORM_TO_SYSTEM = {plat: sys for sys, d in SYSTEMS.items() for plat in d["pla
 SYSTEM_TO_CORES = {sys: d["cores"] for sys, d in SYSTEMS.items()}
 PLATFORMS_ORDERED = [plat for d in SYSTEMS.values() for plat in d["platforms"]]
 
+ARCADE_PLATFORMS = {
+    "FBNeo - Arcade Games",
+    "Handheld Electronic Game",
+    # future:
+    # "MAME",
+    # "FinalBurn Alpha",
+}
+
 # ============================================================
 # ========================= DATABASE =========================
 # ============================================================
@@ -741,6 +838,15 @@ def load_retroarch_playtime():
                         if len(parts) == 3:
                             h, m, s = map(int, parts)
                             seconds = h * 3600 + m * 60 + s
+
+                    # Normalize last_played (RetroArch stores UNIX timestamp)
+                    if last:
+                        try:
+                            last = datetime.datetime.fromtimestamp(
+                                int(last)
+                            ).strftime("%Y-%m-%d %H:%M:%S")
+                        except:
+                            last = ""
 
                     out[rom] = {
                         "seconds": seconds,
@@ -1301,6 +1407,9 @@ def bin_base(filename):
 def build_rom_rename_plan(rom_dir, old_filename, new_filename):
     plan = []
 
+    # IMPORTANT:
+    # ROM filenames must remain untouched.
+    # RetroArch sanitization applies ONLY to thumbnails.
     oldBase = old_filename.rsplit(".", 1)[0]
     newBase = new_filename.rsplit(".", 1)[0]
 
@@ -1337,7 +1446,6 @@ def build_rom_rename_plan(rom_dir, old_filename, new_filename):
 
     return plan
 
-
 # ---------- Apply renames ----------
 
 def apply_renames(rename_plan):
@@ -1353,47 +1461,37 @@ def apply_renames(rename_plan):
         os.rename(src, dst)
 
 # ---------- Save files ----------
-def rename_save_files(old_file, new_file):
-    oldbase = os.path.splitext(old_file)[0]
-    newbase = os.path.splitext(new_file)[0]
+def rename_save_files(old_filename, new_filename):
+    """
+    Rename RetroArch save files.
 
+    IMPORTANT:
+    Saves must keep the exact ROM filename.
+    RetroArch does NOT sanitize & in save filenames.
+    """
     saves_root = os.path.join(RETROARCH_DIR, "saves")
+    if not os.path.isdir(saves_root):
+        return
 
-    # Determine platform from ROM path context
-    # Caller guarantees correct working directory
-    platform = None
-    for plat in PLATFORMS_ORDERED:
-        plat_dir = os.path.join(GAMES_DIR, plat)
-        if os.path.isdir(plat_dir):
-            platform = plat
-            break
+    oldStem, _ = split_stem(old_filename)
+    newStem, _ = split_stem(new_filename)
 
-    allowed_roots = [saves_root]
+    for dirpath, _, files in os.walk(saves_root):
+        for fname in files:
+            base, ext = os.path.splitext(fname)
 
-    if platform:
-        system = PLATFORM_TO_SYSTEM.get(platform)
-        if system:
-            cores = SYSTEM_TO_CORES.get(system, [])
+            if base != oldStem:
+                continue
 
-            # Platform-named save folder
-            plat_path = os.path.join(saves_root, platform)
-            if os.path.isdir(plat_path):
-                allowed_roots.append(plat_path)
+            newName = newStem + ext
+            if newName == fname:
+                continue
 
-            # Core-named save folders
-            for core in cores:
-                core_path = os.path.join(saves_root, core)
-                if os.path.isdir(core_path):
-                    allowed_roots.append(core_path)
+            src = os.path.join(dirpath, fname)
+            dst = os.path.join(dirpath, newName)
 
-    for root in allowed_roots:
-        for dirpath, _, files in os.walk(root):
-            for fname in files:
-                if fname.startswith(oldbase + "."):
-                    src = os.path.join(dirpath, fname)
-                    dst = os.path.join(dirpath, newbase + fname[len(oldbase):])
-                    if not os.path.exists(dst):
-                        os.rename(src, dst)
+            if not os.path.exists(dst):
+                os.rename(src, dst)
 
 # ---------- Log files ----------
 def rename_retroarch_logs(old_file, new_file):
@@ -1447,12 +1545,33 @@ def replace_stem_in_file(path, oldStem, newStem):
 
     return True
 
-def replace_stem_in_tree(root, oldStem, newStem, extensions=None, *_):
+def replace_stem_in_tree(root, oldStem, newStem, exts=None):
+    """
+    Replace filename stem matches in a directory tree using
+    tolerant RetroArch-safe matching.
+    """
+    if not os.path.isdir(root):
+        return
+
     for dirpath, _, files in os.walk(root):
-        for name in files:
-            if extensions and not name.lower().endswith(extensions):
+        for fname in files:
+            base, ext = os.path.splitext(fname)
+
+            if exts and ext.lower() not in exts:
                 continue
-            replace_stem_in_file(os.path.join(dirpath, name), oldStem, newStem)
+
+            if not filenames_equivalent(base, oldStem, strip_ext=False):
+                continue
+
+            newName = newStem + ext
+            if newName == fname:
+                continue
+
+            src = os.path.join(dirpath, fname)
+            dst = os.path.join(dirpath, newName)
+
+            if not os.path.exists(dst):
+                os.rename(src, dst)
 
 # ============================================================
 # ===================== MODIFY PLANNER ======================
@@ -1511,6 +1630,63 @@ def parse_seconds(value):
         return h * 3600 + m * 60 + s
 
     return 0
+
+def rename_platform_images(platform, old_file, new_file):
+    """
+    Rename image files whose filename stem matches the ROM filename.
+
+    Rules:
+    - Matching is tolerant (& ↔ _)
+    - RetroArch thumbnails use sanitized filename
+    - LaunchBox Images and ImagesRAW keep unsanitized filename
+    """
+    oldStem, _ = os.path.splitext(old_file)
+    newStem, _ = os.path.splitext(new_file)
+
+    roots = []
+
+    # RetroArch thumbnails (SANITIZED)
+    if "RETROARCH_IMG_DIR" in globals():
+        ra_root = os.path.join(RETROARCH_IMG_DIR, platform)
+        if os.path.isdir(ra_root):
+            roots.append(("retroarch", ra_root))
+
+    # LaunchBox Images (KEEP &)
+    if "LAUNCHBOX_IMG_DIR" in globals():
+        lb_root = os.path.join(LAUNCHBOX_IMG_DIR, platform)
+        if os.path.isdir(lb_root):
+            roots.append(("launchbox", lb_root))
+
+    # ImagesRAW (KEEP &)
+    if CONFIG_FILE == "specialconfig.txt":
+        raw_root = os.path.join(r"H:\ImagesRAW", platform)
+        if os.path.isdir(raw_root):
+            roots.append(("raw", raw_root))
+
+    for kind, root in roots:
+        # Decide target stem per ecosystem
+        if kind == "retroarch":
+            targetStem = sanitize_rom_filename(newStem)
+        else:
+            targetStem = newStem  # keep &
+
+        for dirpath, _, files in os.walk(root):
+            for fname in files:
+                base, ext = os.path.splitext(fname)
+
+                # Tolerant match
+                if not filenames_equivalent(base, oldStem, strip_ext=False):
+                    continue
+
+                newName = targetStem + ext
+                if newName == fname:
+                    continue
+
+                src = os.path.join(dirpath, fname)
+                dst = os.path.join(dirpath, newName)
+
+                if not os.path.exists(dst):
+                    os.rename(src, dst)
 
 def build_modify_plans(old_lines, new_lines, local_rows, play_rows):
     def parse(row):
@@ -1599,7 +1775,9 @@ def build_modify_plans(old_lines, new_lines, local_rows, play_rows):
         # --------------------------------------------------
         if of != nf:
             rom_dir = os.path.join(GAMES_DIR, op)
-            rename_jobs.append((rom_dir, of, nf))
+            rename_jobs.extend(
+                expand_multidisc_renames(rom_dir, of, nf)
+            )
 
         # --------------------------------------------------
         # Playtime propagation
@@ -1656,7 +1834,6 @@ def cmd_rescan():
     print()
     cmd_export_playtime()
 
-
 # ---------- Paths check ----------
 def cmd_check_paths():
     print("\n=== System Paths ===\n")
@@ -1684,6 +1861,13 @@ def cmd_check_paths():
     row("PCSX2 playtime:", SETUP["PCSX2_PLAYTIME"])
     row("LaunchBox Data:", SETUP["LAUNCHBOX_DATA_DIR"])
 
+    # ---------- PC Games ----------
+    row("Minecraft Directory:", SETUP.get("MINECRF_DIR"))
+    row("WoW Retail Directory:", SETUP.get("WOWRE_DIR"))
+    row("WoW Classic Era Directory:", SETUP.get("WOWERA_DIR"))
+    row("WoW Classic Progression Directory:", SETUP.get("WOWCLA_DIR"))
+
+
     width = max(len(r[1]) for r in rows) + 2
     for s, label, path in rows:
         print(f"[{s}] {label:<{width}} {path}")
@@ -1707,6 +1891,290 @@ def cmd_check_paths():
         os.path.exists(p) for _, _, p in rows
     ) else "ERRORS FOUND")
 
+# ---------- Change Retroarch labels ----------
+
+def backup_retroarch_labels():
+    """
+    Create a timestamped backup of all RetroArch playlist labels.
+    """
+    if not os.path.isdir(RETROARCH_PLAYLIST_DIR):
+        return None
+
+    # Backup folder inside script directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    backup_dir = os.path.join(script_dir, "backup")
+    os.makedirs(backup_dir, exist_ok=True)
+
+    stamp = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
+    out_file = os.path.join(backup_dir, f"label_backup_{stamp}.txt")
+
+    lines = []
+
+    for fname in sorted(os.listdir(RETROARCH_PLAYLIST_DIR)):
+        if not fname.lower().endswith(".lpl"):
+            continue
+
+        path = os.path.join(RETROARCH_PLAYLIST_DIR, fname)
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except:
+            continue
+
+        for entry in data.get("items", []):
+            crc = entry.get("crc32", "").strip()
+            label = entry.get("label", "").strip()
+
+            if not crc or not label:
+                continue
+
+            lines.append(
+                f'{fname}, "crc32": "{crc}", "label": "{label}"'
+            )
+
+    with open(out_file, "w", encoding="utf-8") as f:
+        for line in lines:
+            f.write(line + "\n")
+
+    return out_file
+    
+def restore_labels_from_oldest_backup():
+    """
+    Restore playlist labels using the oldest label backup.
+    Matches by (playlist filename + crc32).
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    backup_dir = os.path.join(script_dir, "backup")
+
+    if not os.path.isdir(backup_dir):
+        print("No backup folder found.")
+        return
+
+    backups = sorted(
+        f for f in os.listdir(backup_dir)
+        if f.startswith("label_backup_") and f.endswith(".txt")
+    )
+
+    if not backups:
+        print("No label backups found.")
+        return
+
+    oldest = os.path.join(backup_dir, backups[0])
+
+    restore_map = {}  # (playlist, crc32) -> label
+
+    with open(oldest, "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                playlist, rest = line.split(",", 1)
+                crc = rest.split('"crc32": "')[1].split('"')[0]
+                label = rest.split('"label": "')[1].rsplit('"', 1)[0]
+                restore_map[(playlist.strip(), crc.strip())] = label
+            except:
+                continue
+
+    restored = 0
+
+    for fname in os.listdir(RETROARCH_PLAYLIST_DIR):
+        if not fname.lower().endswith(".lpl"):
+            continue
+
+        path = os.path.join(RETROARCH_PLAYLIST_DIR, fname)
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except:
+            continue
+
+        changed = False
+
+        for item in data.get("items", []):
+            key = (fname, item.get("crc32", "").strip())
+            if key in restore_map:
+                new_label = restore_map[key]
+                if item.get("label") != new_label:
+                    item["label"] = new_label
+                    changed = True
+                    restored += 1
+
+        if changed:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+
+    print(f"Restored {restored} labels from backup: {backups[0]}")
+
+def set_labels_to_rom_filename():
+    """
+    Set labels to ROM filename stem.
+
+    Exceptions:
+    - Arcade platforms always use database title
+    - 3DS strips ".standard"
+    """
+    db = {}
+
+    # Load database map (filename → title)
+    try:
+        with open("local_games.txt", "r", encoding="utf-8") as f:
+            for line in f:
+                parts = [p.strip() for p in line.split("|")]
+                if len(parts) != 4:
+                    continue
+                title = parts[1]
+                filename = parts[3]
+                db[filename] = title
+    except:
+        print("local_games.txt not found.")
+        return
+
+    updated = 0
+
+    for playlist in os.listdir(RETROARCH_PLAYLIST_DIR):
+        if not playlist.lower().endswith(".lpl"):
+            continue
+
+        playlist_name = os.path.splitext(playlist)[0]
+        path = os.path.join(RETROARCH_PLAYLIST_DIR, playlist)
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except:
+            continue
+
+        changed = False
+        is_arcade = playlist_name in ARCADE_PLATFORMS
+        is_3ds = "3ds" in playlist_name.lower()
+
+        for item in data.get("items", []):
+            rom_path = item.get("path", "").strip()
+            if not rom_path:
+                continue
+
+            filename = os.path.basename(rom_path)
+
+            # Arcade → force DB title
+            if is_arcade and filename in db:
+                new_label = db[filename]
+            else:
+                stem = os.path.splitext(filename)[0]
+
+                if is_3ds and stem.endswith(".standard"):
+                    stem = stem[:-9]
+
+                new_label = stem
+
+            if item.get("label") != new_label:
+                item["label"] = new_label
+                changed = True
+                updated += 1
+
+        if changed:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+
+    print(f"Updated {updated} labels to ROM filenames.")
+
+def set_labels_to_database_titles():
+    """
+    Set RetroArch playlist labels using local_games.txt database titles.
+    Matches by filename.
+    """
+    db = {}
+
+    # Build filename → title map
+    try:
+        with open("local_games.txt", "r", encoding="utf-8") as f:
+            for line in f:
+                parts = [p.strip() for p in line.split("|")]
+                if len(parts) != 4:
+                    continue
+
+                title = parts[1]
+                filename = parts[3]
+
+                db[filename] = title
+    except:
+        print("local_games.txt not found.")
+        return
+
+    updated = 0
+
+    for fname in os.listdir(RETROARCH_PLAYLIST_DIR):
+        if not fname.lower().endswith(".lpl"):
+            continue
+
+        path = os.path.join(RETROARCH_PLAYLIST_DIR, fname)
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except:
+            continue
+
+        changed = False
+
+        for item in data.get("items", []):
+            rom_path = item.get("path", "").strip()
+            if not rom_path:
+                continue
+
+            filename = os.path.basename(rom_path)
+
+            if filename not in db:
+                continue
+
+            new_label = db[filename]
+
+            if item.get("label") != new_label:
+                item["label"] = new_label
+                changed = True
+                updated += 1
+
+        if changed:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+
+    print(f"Updated {updated} labels from database.")
+
+def cmd_change_labels():
+    backup_file = backup_retroarch_labels()
+
+    if backup_file:
+        print(f"\nAll labels have been backed up → {backup_file}")
+    else:
+        print("\nNo playlists found to back up.")
+
+    print(f"{Fore.LIGHTRED_EX}[WARNING]{Style.RESET_ALL} This will overwrite ALL current Retroarch game labels.\n")
+
+    while True:
+        print("Select source for labels")
+        print("1) Restore labels from oldest backup")
+        print("2) Set labels to match ROM filename")
+        print("3) Set labels to match database title")
+        print("4) Exit")
+
+        choice = input("\nSelect option: ").strip()
+
+        if choice == "4":
+            print("Change labels cancelled.")
+            return
+
+        if choice == "1":
+            restore_labels_from_oldest_backup()
+            return
+
+        if choice == "2":
+            set_labels_to_rom_filename()
+            return
+
+        if choice == "3":
+            set_labels_to_database_titles()
+            return
+
+        print("\nInvalid selection.\n")
 
 # ---------- Export ----------
 
@@ -1996,11 +2464,21 @@ def cmd_sync():
 
 def apply_rename_jobs(rename_jobs):
     for rom_dir, old_file, new_file in rename_jobs:
+        # ----------------------------------
+        # Platform must be resolved FIRST
+        # ----------------------------------
+        platform = os.path.basename(rom_dir)
+        system = PLATFORM_TO_SYSTEM.get(platform)
+
         plan = build_rom_rename_plan(rom_dir, old_file, new_file)
         apply_renames(plan)
         rename_save_files(old_file, new_file)
         rename_retroarch_logs(old_file, new_file)
+        rename_platform_images(platform, old_file, new_file)
 
+        # ----------------------------------
+        # CUE → BIN handling
+        # ----------------------------------
         if old_file.lower().endswith(".cue"):
             rewrite_cue_file(
                 os.path.join(rom_dir, new_file),
@@ -2008,31 +2486,52 @@ def apply_rename_jobs(rename_jobs):
                 cue_base(new_file)
             )
 
-        replace_stem_in_tree(
-            RETROARCH_PLAYLIST_DIR,
-            old_file,
-            new_file
-        )
+        # ----------------------------------
+        # RetroArch playlists & LaunchBox XML
+        # (FULL filename content replacement, not file rename)
+        # ----------------------------------
+        try:
+            # Replace inside all .lpl files (playlists contain full filenames)
+            if os.path.isdir(RETROARCH_PLAYLIST_DIR):
+                for dirpath, _, files in os.walk(RETROARCH_PLAYLIST_DIR):
+                    for fname in files:
+                        if not fname.lower().endswith(".lpl"):
+                            continue
+                        path = os.path.join(dirpath, fname)
+                        try:
+                            replace_stem_in_file(path, old_file, new_file)
+                        except Exception:
+                            # best-effort: skip files that fail
+                            pass
 
-        replace_stem_in_tree(
-            LAUNCHBOX_DATA_DIR,
-            old_file,
-            new_file,
-            (".xml",)
-        )
+            # Replace inside all .xml files in the LaunchBox data directory
+            if os.path.isdir(LAUNCHBOX_DATA_DIR):
+                for dirpath, _, files in os.walk(LAUNCHBOX_DATA_DIR):
+                    for fname in files:
+                        if not fname.lower().endswith(".xml"):
+                            continue
+                        path = os.path.join(dirpath, fname)
+                        try:
+                            replace_stem_in_file(path, old_file, new_file)
+                        except Exception:
+                            pass
 
+        except Exception:
+            # guard: do not break the whole rename operation
+            pass
+
+        # ----------------------------------
+        # Everything below uses STEMS (existing behavior)
+        # ----------------------------------
         oldStem, _ = split_stem(old_file)
         newStem, _ = split_stem(new_file)
 
-        # ---- Scoped save files ----
         replace_stem_in_tree(
             os.path.join(RETROARCH_DIR, "saves"),
             oldStem,
             newStem
         )
 
-        platform = os.path.basename(rom_dir)
-        system = PLATFORM_TO_SYSTEM.get(platform)
         if not system:
             continue
 
@@ -2043,7 +2542,6 @@ def apply_rename_jobs(rename_jobs):
         saves_root = os.path.join(RETROARCH_DIR, "saves")
         logs_root = os.path.join(RETROARCH_PLAYLIST_DIR, "logs")
 
-        # Platform-named folders
         plat_save = os.path.join(saves_root, platform)
         plat_log = os.path.join(logs_root, platform)
 
@@ -2053,7 +2551,6 @@ def apply_rename_jobs(rename_jobs):
         if os.path.isdir(plat_log):
             replace_stem_in_tree(plat_log, oldStem, newStem)
 
-        # Core-named folders
         for core in cores:
             core_save = os.path.join(saves_root, core)
             core_log = os.path.join(logs_root, core)
@@ -2064,7 +2561,6 @@ def apply_rename_jobs(rename_jobs):
             if os.path.isdir(core_log):
                 replace_stem_in_tree(core_log, oldStem, newStem)
 
-        # ---- Scoped RetroArch configs ----
         for core in cores:
             core_cfg_dir = os.path.join(RETROARCH_CFG_DIR, core)
             if not os.path.isdir(core_cfg_dir):
@@ -2075,6 +2571,15 @@ def apply_rename_jobs(rename_jobs):
                 oldStem,
                 newStem
             )
+
+def is_disc_tag_removed(old_file, new_file):
+    """
+    Return True if old_file has a disc tag and new_file does not.
+    """
+    def has_disc(name):
+        return re.search(r"\b(disc|disk|cd)\s*\d+\b", name, re.I) is not None
+
+    return has_disc(old_file) and not has_disc(new_file)
 
 def cmd_modify(arg=None):
     if arg:
@@ -2110,6 +2615,23 @@ def cmd_modify(arg=None):
     for _, old_file, new_file in rename_jobs:
         if os.path.splitext(old_file)[1].lower() != os.path.splitext(new_file)[1].lower():
             ext_changes.append((old_file, new_file))
+
+    disc_removals = []
+    for _, old_file, new_file in rename_jobs:
+        if is_disc_tag_removed(old_file, new_file):
+            disc_removals.append((old_file, new_file))
+
+    if disc_removals:
+        print(f"\n{Fore.LIGHTRED_EX}[WARNING]{Style.RESET_ALL}")
+        for o, n in disc_removals:
+            print(f"  {o} → {n}")
+        resp = input(
+            "\nYou are about to remove a disc # tag. "
+            "Are you sure you want to continue? Y/N: "
+        ).strip().lower()
+        if resp != "y":
+            print("Modify cancelled.")
+            return
 
     if ext_changes:
         print("\nYou are about to change the file extension of some files:")
@@ -2295,6 +2817,7 @@ def cmd_backup():
 
     # LaunchBox database
     backup_tree_once(LAUNCHBOX_DATA_DIR)
+    backup_retroarch_labels()
 
     print("Backup complete.")
 
@@ -2306,6 +2829,7 @@ COMMANDS = {
     "check paths": cmd_check_paths,
     "rescan": cmd_rescan,
     "sync": cmd_sync,
+    "change labels": cmd_change_labels,
     "modify": cmd_modify,
     "history": show_history,
     "revert": cmd_revert,
@@ -2317,6 +2841,7 @@ Commands:
   check paths     - Verify all emulator and platform paths
   rescan          - Refresh game library
   sync            - Sync playtime from emulators into LaunchBox
+  change labels   - backup and modify Retroarch labels
   modify          - Batch edit playtime | last played | filename
   history         - Show modification log
   revert <n>      - Undo or redo a modification (check history)

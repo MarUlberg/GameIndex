@@ -180,7 +180,7 @@ def normalize_db_lookup_id(game_id, system):
 
     return game_id
 
-def clean_title(base):
+def clean_title(base, system=None):
     # Takes a filename with no [tags] and returns a clean title.
     title = os.path.splitext(base)[0]
 
@@ -195,8 +195,11 @@ def clean_title(base):
         flags=re.I,
     )
 
-    # Remove No-Intro prefixes
-    title = re.sub(r"^\d{3,5}\s*-\s*", "", title)
+    # --------------------------------------------------
+    # No-Intro numeric prefixes (DS / 3DS ONLY)
+    # --------------------------------------------------
+    if system in ("NDS", "3DS"):
+        title = re.sub(r"^\d{3,5}\s*-\s*", "", title)
 
     # Normalize trailing articles: "Sims, The" → "The Sims"
     # Supports English, French, and German
@@ -209,7 +212,7 @@ def clean_title(base):
     title = re.sub(r"\s+-\s+", ": ", title)
 
     # Remove parentheses (regions, revs, etc)
-    title = re.sub(r"\s*\([^)]*\)", "", title)
+    title = re.sub(r"\s*\([^)]*\)\s*", " ", title)
 
     # Normalize whitespace
     title = re.sub(r"\s+", " ", title).strip()
@@ -219,6 +222,7 @@ def clean_title(base):
     title = re.sub(r"\bPokémon\s*-\s*", "Pokémon: ", title)
 
     return title
+
 
 
 def detect_sector_mode(cue):
@@ -1300,7 +1304,43 @@ def scan_psp(path):
 # ============================================================
 # ========================= SCANNER ==========================
 # ============================================================
- 
+
+def should_skip_disc(filename, sibling_filenames):
+    """
+    Skip Disc 2+ only if Disc 1 exists and the filename differs
+    only by the disc token.
+    """
+
+    def norm(name):
+        # Remove disc token only
+        n = name.lower()
+        n = re.sub(r"\b(disc|disk|cd)\s*\d+\b", "", n)
+        n = re.sub(r"\s+", " ", n)
+        return n.strip()
+
+    m = re.search(r"\b(disc|disk|cd)\s*(\d+)\b", filename.lower())
+    if not m:
+        return False
+
+    disc_num = int(m.group(2))
+    if disc_num <= 1:
+        return False
+
+    base_norm = norm(filename)
+
+    for other in sibling_filenames:
+        if other == filename:
+            continue
+
+        m2 = re.search(r"\b(disc|disk|cd)\s*(\d+)\b", other.lower())
+        if not m2:
+            continue
+
+        if int(m2.group(2)) == 1 and norm(other) == base_norm:
+            return True
+
+    return False
+
 ENABLED_SYSTEMS = {
     "ARCADE",
     "GW",
@@ -1326,8 +1366,6 @@ ENABLED_SYSTEMS = {
     "PS2",
     "PSP",
 }
-
-
     
 def scan_systems():
 
@@ -1352,8 +1390,22 @@ def scan_systems():
         if not exts:
             continue
 
+        # ----------------------------------------------
+        # Collect sibling filenames once per system
+        # ----------------------------------------------
+        all_files = [
+            os.path.basename(p)
+            for p in find_games(root, exts)
+        ]
+
         for path in find_games(root, exts):
             filename = os.path.basename(path)
+
+            # ==============================================
+            # MULTI-DISC FILTER (pair-aware)
+            # ==============================================
+            if should_skip_disc(filename, all_files):
+                continue
 
             gameid_title = None
             title_source = None
