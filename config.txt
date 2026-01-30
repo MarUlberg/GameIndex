@@ -13,6 +13,7 @@ PLAYTIME_SEC = False
 # ---------------- LaunchBox ----------------
 
 LAUNCHBOX_DIR = "C:\\LaunchBox"
+LAUNCHBOX_IMG_DIR = os.path.join(LAUNCHBOX_DIR, "Images")
 LAUNCHBOX_DATA_DIR = os.path.join(LAUNCHBOX_DIR, "Data", "Platforms")
 
 # ---------------- LaunchBox Platform XML ----------------
@@ -62,6 +63,7 @@ RETROARCH_DIR = "C:\\Program Files\\RetroArch\\"
 RETROARCH_CFG_DIR = os.path.join(RETROARCH_DIR, "config")
 RETROARCH_PLAYLIST_DIR = os.path.join(RETROARCH_DIR, "playlists")
 RETROARCH_LOG_DIR = os.path.join(RETROARCH_PLAYLIST_DIR, "logs")
+RETROARCH_IMG_DIR = os.path.join(RETROARCH_DIR, "thumbnails")
 
 GAMES_DIR = os.path.join(RETROARCH_DIR, "games")
 
