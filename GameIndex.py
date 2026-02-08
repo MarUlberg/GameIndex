@@ -4,114 +4,19 @@ import sys
 import time
 import json
 import zlib
-import struct
-import string
 import shutil
+import string
+import struct
 import datetime
 import subprocess
+import unicodedata
 import configparser
 import xml.etree.ElementTree as ET
+from io import BytesIO
+from PIL import Image
 from colorama import Fore, Style, init
+
 init()
-
-# ============================================================
-# ========== RETROARCH THUMBNAIL SANITIZATION POLICY =========
-# ============================================================
-
-# RetroArch thumbnails replace a small set of unsafe characters
-# with "_" when generating image filenames.
-#
-# IMPORTANT:
-# - This applies ONLY to thumbnail filenames
-# - ROMs, saves, logs, playlists, XML keep original characters
-# - Matching must treat sanitized and unsanitized names as equal
-
-RETROARCH_REJECTED_CHARS = '&/\\:*?"<>|'
-
-def sanitize_rom_filename(name):
-    """
-    Return the RetroArch thumbnail-safe version of a filename.
-
-    Used ONLY for thumbnail paths.
-    """
-    base, ext = os.path.splitext(name)
-
-    for ch in RETROARCH_REJECTED_CHARS:
-        base = base.replace(ch, "_")
-
-    return base + ext
-
-
-def normalize_filename_for_match(name, *, strip_ext=True):
-    """
-    Normalize filename for tolerant comparison.
-
-    Allows matching:
-        Foo & Bar
-        Foo _ Bar
-    """
-    name = sanitize_rom_filename(name)
-
-    if strip_ext:
-        name, _ = os.path.splitext(name)
-
-    return name.lower()
-
-
-def filenames_equivalent(a, b, *, strip_ext=True):
-    """
-    True if filenames should be considered the same
-    under thumbnail normalization rules.
-    """
-    return normalize_filename_for_match(a, strip_ext=strip_ext) == \
-           normalize_filename_for_match(b, strip_ext=strip_ext)
-
-
-def expand_multidisc_renames(rom_dir, old_file, new_file):
-    """
-    Expand Disc 1 rename across sibling discs.
-
-    - Disc numbers preserved
-    - Only base title changes
-    - Cue/bin safe
-    """
-    jobs = []
-
-    def sig(name):
-        n = name.lower()
-        m = re.search(r"\b(disc|disk|cd)\s*(\d+)\b", n)
-        disc = int(m.group(2)) if m else None
-        base = re.sub(r"\b(disc|disk|cd)\s*\d+\b", "", n)
-        base = re.sub(r"\s+", " ", base).strip()
-        return base, disc
-
-    old_base, old_disc = sig(old_file)
-    _, new_disc = sig(new_file)
-
-    if not old_disc or not new_disc:
-        return [(rom_dir, old_file, new_file)]
-
-    def replace_disc_number(template, disc_num):
-        def repl(m):
-            return f"{m.group(1)}{disc_num}"
-
-        return re.sub(
-            r"\b((?:disc|disk|cd)\s*)\d+\b",
-            repl,
-            template,
-            flags=re.I
-        )
-
-    for fname in os.listdir(rom_dir):
-        fbase, fdisc = sig(fname)
-
-        if fdisc is None or fbase != old_base:
-            continue
-
-        new_name = replace_disc_number(new_file, fdisc)
-        jobs.append((rom_dir, fname, new_name))
-
-    return jobs
 
 # ============================================================
 # ========================== SETUP ===========================
@@ -190,7 +95,7 @@ def load_setup(path):
     return env
 
 # ============================================================
-# =============== VERIFY / REPAIR CORE PATHS =================
+# ================== CORE PATH VERIFICATION ==================
 # ============================================================
 
 def write_config_updates(path, updates):
@@ -215,7 +120,7 @@ def write_config_updates(path, updates):
         f.writelines(lines)
 
 # ============================================================
-# =============== PROGRAM ROOT AUTO-DETECTION ===============
+# ================== PROGRAM ROOT DETECTION ==================
 # ============================================================
 
 def locate_program_roots():
@@ -295,7 +200,7 @@ def locate_program_roots():
     return found
         
 # ============================================================
-# =============== EARLY PATH VERIFICATION ====================
+# ======================= PATH PRECHECK ======================
 # ============================================================
 
 MIN_SETUP = load_setup_minimal(CONFIG_FILE)
@@ -372,6 +277,19 @@ if missing:
     if updates:
         write_config_updates(CONFIG_FILE, updates)
 
+def use_standalone_emulator(system):
+    """
+    Decide whether a system should use its standalone emulator
+    or fall back to RetroArch behavior.
+    """
+    if system == "PS2":
+        return has_required_exe(PCSX2_DIR, ["pcsx2.exe"])
+
+    if system in ("GC", "WII"):
+        return has_required_exe(DOLPHIN_DIR, ["dolphin.exe"])
+
+    return False
+
 
 # ------------------------------------------------------------
 # Now load the full config safely
@@ -386,29 +304,49 @@ CODEWORDS = [
 # ========================== PATHS ===========================
 # ============================================================
 
-LOCAL_DB         = "local_games.txt"
-HISTORY          = "history.txt"
-PLAYTIME_EXPORT  = "playtime_export.txt"
+LOCAL_DB        = "local_games.txt"
+HISTORY         = "history.txt"
+PLAYTIME_EXPORT = "playtime_export.txt"
 SCANNER_EXEC, SCANNER_SCRIPT = resolve_scanner()
 
 PRINT_ALL = bool(SETUP.get("PRINT_ALL", False))
 
-RETROARCH_DIR         = SETUP["RETROARCH_DIR"]
-RETROARCH_CFG_DIR     = SETUP["RETROARCH_CFG_DIR"]
+# --- ROM directory ---
+GAMES_DIR = SETUP["GAMES_DIR"]
+
+# --- RetroArch ---
+RETROARCH_DIR          = SETUP["RETROARCH_DIR"]
+RETROARCH_CFG_DIR      = SETUP["RETROARCH_CFG_DIR"]
 RETROARCH_PLAYLIST_DIR = SETUP["RETROARCH_PLAYLIST_DIR"]
-RETROARCH_LOG_DIR     = SETUP["RETROARCH_LOG_DIR"]
-RETROARCH_IMG_DIR = SETUP.get("RETROARCH_IMG_DIR")
+RETROARCH_LOG_DIR      = SETUP["RETROARCH_LOG_DIR"]
 
-DOLPHIN_DIR      = SETUP["DOLPHIN_DIR"]
-DOLPHIN_PLAYTIME = SETUP["DOLPHIN_PLAYTIME"]
+# --- RetroArch images (optional) ---
+RETROARCH_IMG_DIR       = SETUP.get("RETROARCH_IMG_DIR")
+RETROARCH_SCREEN_DIR    = SETUP.get("RETROARCH_SCREEN_DIR")
+RETROARCH_COVER_SUBDIR  = SETUP.get("RETROARCH_COVER_SUBDIR", "Named_Boxarts")
+RETROARCH_SCREEN_SUBDIR = SETUP.get("RETROARCH_SCREEN_SUBDIR", "Named_Snaps")
 
-PCSX2_DIR        = SETUP["PCSX2_DIR"]
-PCSX2_PLAYTIME   = SETUP["PCSX2_PLAYTIME"]
+# --- Dolphin (optional) ---
+DOLPHIN_DIR      = SETUP.get("DOLPHIN_DIR")
+DOLPHIN_PLAYTIME = SETUP.get("DOLPHIN_PLAYTIME")
+DOLPHIN_IMG_DIR  = SETUP.get("DOLPHIN_IMG_DIR")
+DOLPHIN_SCREEN_DIR  = SETUP.get("DOLPHIN_SCREEN_DIR")
 
-LAUNCHBOX_DATA_DIR   = SETUP["LAUNCHBOX_DATA_DIR"]
-LAUNCHBOX_PLATFORMS  = SETUP["LAUNCHBOX_PLATFORMS"]
-LAUNCHBOX_IMG_DIR = SETUP.get("LAUNCHBOX_IMG_DIR")
-GAMES_DIR           = SETUP["GAMES_DIR"]
+# --- PCSX2 (optional) ---
+PCSX2_DIR        = SETUP.get("PCSX2_DIR")
+PCSX2_PLAYTIME   = SETUP.get("PCSX2_PLAYTIME")
+PCSX2_IMG_DIR    = SETUP.get("PCSX2_IMG_DIR")
+PCSX2_SCREEN_DIR    = SETUP.get("PCSX2_SCREEN_DIR")
+
+# --- LaunchBox (optional) ---
+LAUNCHBOX_DATA_DIR      = SETUP.get("LAUNCHBOX_DATA_DIR")
+LAUNCHBOX_PLATFORMS     = SETUP.get("LAUNCHBOX_PLATFORMS")
+LAUNCHBOX_IMG_DIR       = SETUP.get("LAUNCHBOX_IMG_DIR")
+LAUNCHBOX_COVER_SUBDIR  = SETUP.get("LAUNCHBOX_COVER_SUBDIR", "Box - Front")
+LAUNCHBOX_SCREEN_SUBDIR = SETUP.get("LAUNCHBOX_SCREEN_SUBDIR", "Screenshot - Gameplay")
+
+# --- Misc ---
+ADITIONAL_IMG_DIR = SETUP.get("ADITIONAL_IMG_DIR")
 
 
 # ============================================================
@@ -421,8 +359,22 @@ SYSTEMS = {
             "FBNeo - Arcade Games",
         ],
         "cores": [
-            "FinalBurn Neo",
-            "MAME",
+            "Daphne",
+            "DICE",
+            "FB Alpha",
+            "FB Alpha 2012",
+            "FB Neo",
+            "HBMAME",
+            "MAME (Current)",
+            "MAME 2000",
+            "MAME 2003",
+            "MAME 2003 Midway",
+            "MAME 2003-Plus",
+            "MAME 2009",
+            "MAME 2010",
+            "MAME 2015",
+            "MAME 2016",
+            "UME 2015",
         ],
     },
 
@@ -431,7 +383,8 @@ SYSTEMS = {
             "Handheld Electronic Game",
         ],
         "cores": [
-            "MAME",
+            "GW",
+            "MAME (Current)",
         ],
     },
 
@@ -440,10 +393,16 @@ SYSTEMS = {
             "Nintendo - Game Boy",
         ],
         "cores": [
+            "Emux GB",
+            "fixGB",
             "Gambatte",
-            "SameBoy",
             "Gearboy",
+            "SameBoy",
             "TGB Dual",
+            "mGBA",
+            "higan Accuracy",
+            "Mesen-S",
+            "nSide Balanced",
         ],
     },
 
@@ -452,10 +411,16 @@ SYSTEMS = {
             "Nintendo - Game Boy Color",
         ],
         "cores": [
+            "Emux GB",
+            "fixGB",
             "Gambatte",
-            "SameBoy",
             "Gearboy",
+            "SameBoy",
             "TGB Dual",
+            "mGBA",
+            "higan Accuracy",
+            "Mesen-S",
+            "nSide Balanced",
         ],
     },
 
@@ -464,10 +429,13 @@ SYSTEMS = {
             "Nintendo - Game Boy Advance",
         ],
         "cores": [
-            "mGBA",
+            "Beetle GBA",
             "gpSP",
-            "VBA Next",
+            "Meteor",
+            "mGBA",
+            "TempGBA",
             "VBA-M",
+            "VBA Next",
         ],
     },
 
@@ -476,9 +444,10 @@ SYSTEMS = {
             "Nintendo - Nintendo DS",
         ],
         "cores": [
-            "melonDS",
             "DeSmuME",
             "DeSmuME 2015",
+            "melonDS 2021",
+            "melonDS DS",
         ],
     },
 
@@ -488,6 +457,8 @@ SYSTEMS = {
         ],
         "cores": [
             "Citra",
+            "Citra 2018",
+            "Citra Canary",
         ],
     },
 
@@ -496,8 +467,12 @@ SYSTEMS = {
             "Nintendo - Nintendo Entertainment System",
         ],
         "cores": [
-            "Nestopia",
+            "bnes",
+            "Emux NES",
             "FCEUmm",
+            "fixNES",
+            "Mesen",
+            "Nestopia",
             "QuickNES",
         ],
     },
@@ -507,11 +482,26 @@ SYSTEMS = {
             "Nintendo - Super Nintendo Entertainment System",
         ],
         "cores": [
-            "Snes9x",
-            "Snes9x 2005",
-            "Snes9x 2010",
+            "Beetle bsnes",
+            "Beetle Supafaust",
             "bsnes",
-            "bsnes HD",
+            "bsnes 2014 Accuracy",
+            "bsnes 2014 Balanced",
+            "bsnes 2014 Performance",
+            "bsnes C++98 (v085)",
+            "bsnes-hd beta",
+            "bsnes-jg",
+            "bsnes-mercury Accuracy",
+            "bsnes-mercury Balanced",
+            "bsnes-mercury Performance",
+            "Snes9x",
+            "Snes9x 2002",
+            "Snes9x 2005",
+            "Snes9x 2005 Plus",
+            "Snes9x 2010",
+            "higan Accuracy",
+            "Mesen-S",
+            "nSide Balanced",
         ],
     },
 
@@ -521,6 +511,8 @@ SYSTEMS = {
         ],
         "cores": [
             "Mupen64Plus-Next",
+            "Mupen64Plus-Next GLES2",
+            "Mupen64Plus-Next GLES3",
             "ParaLLEl N64",
         ],
     },
@@ -540,6 +532,7 @@ SYSTEMS = {
         ],
         "cores": [
             "Dolphin",
+            "Ishiiruka",
         ],
     },
 
@@ -549,6 +542,7 @@ SYSTEMS = {
         ],
         "cores": [
             "Dolphin",
+            "Ishiiruka",
         ],
     },
 
@@ -557,8 +551,11 @@ SYSTEMS = {
             "Sega - Master System - Mark III",
         ],
         "cores": [
-            "Genesis Plus GX",
+            "Emux SMS",
             "SMS Plus GX",
+            "Genesis Plus GX",
+            "Gearsystem",
+            "PicoDrive",
         ],
     },
 
@@ -567,8 +564,10 @@ SYSTEMS = {
             "Sega - Game Gear",
         ],
         "cores": [
-            "Genesis Plus GX",
             "SMS Plus GX",
+            "Genesis Plus GX",
+            "Gearsystem",
+            "PicoDrive",
         ],
     },
 
@@ -577,7 +576,9 @@ SYSTEMS = {
             "Sega - Mega Drive - Genesis",
         ],
         "cores": [
+            "BlastEm",
             "Genesis Plus GX",
+            "ClownMDEmu",
             "PicoDrive",
         ],
     },
@@ -588,6 +589,7 @@ SYSTEMS = {
         ],
         "cores": [
             "Genesis Plus GX",
+            "ClownMDEmu",
             "PicoDrive",
         ],
     },
@@ -607,8 +609,9 @@ SYSTEMS = {
         ],
         "cores": [
             "Beetle Saturn",
-            "Kronos",
             "YabaSanshiro",
+            "Yabause",
+            "Kronos",
         ],
     },
 
@@ -619,7 +622,6 @@ SYSTEMS = {
         "cores": [
             "Flycast",
             "Flycast GLES2",
-            "Redream",
         ],
     },
 
@@ -630,8 +632,10 @@ SYSTEMS = {
         "cores": [
             "Beetle PSX",
             "Beetle PSX HW",
+            "DuckStation",
+            "PCSX ReARMed",
+            "Rustation",
             "SwanStation",
-            "PCSX-ReARMed",
         ],
     },
 
@@ -640,7 +644,8 @@ SYSTEMS = {
             "Sony - PlayStation 2",
         ],
         "cores": [
-            "PCSX2",
+            "LRPS2",
+            "Play!",
         ],
     },
 
@@ -665,6 +670,219 @@ ARCADE_PLATFORMS = {
     # "MAME",
     # "FinalBurn Alpha",
 }
+
+# ============================================================
+# ====================== SHARED HELPERS ======================
+# ============================================================
+
+TAG_RE = re.compile(r"[\[\(].*?[\]\)]")
+
+def count_tags(name):
+    """Count bracketed / parenthesized tags."""
+    return len(TAG_RE.findall(name))
+
+def pick_best_rom_for_gameid(stems):
+    """
+    Given multiple ROM stems for the same GameID,
+    return the best one based on priority rules.
+    """
+    return sorted(
+        stems,
+        key=lambda s: (count_tags(s), len(s))
+    )[0]
+
+VALID_GAMEID_PATTERNS = [
+    # Dolphin: no lowercase letters, max 7 chars
+    r"[A-Z0-9]{3,7}",
+
+    # PS2: strict disc IDs
+    r"(?:SLES|SLPM|SLUS|SLPS|SCED|SCES|SCUS|SLKA|SCPS|SLED|SCKA|SCAJ|PCPX|PAPX|PBPX|SCCS|TCES|SCPN|TLES|PSXC|SCPM)[_\-\.]?\d{3}[_\-\.]?\d{2}",
+]
+
+def is_valid_gameid(gameid):
+    for pat in VALID_GAMEID_PATTERNS:
+        if re.fullmatch(pat, gameid, re.I):
+            return True
+    return False
+
+def parse_seconds(value):
+    # Parse playtime into seconds.
+    if not value:
+        return 0
+
+    v = value.strip().lower()
+
+    if v.isdigit():
+        return int(v)
+
+    if v.endswith("s") and v[:-1].isdigit():
+        return int(v[:-1])
+
+    h = m = s = 0
+
+    mh = re.search(r'([\d\.]+)\s*h', v)
+    if mh:
+        h = int(mh.group(1).replace(".", "") or 0)
+
+    mm = re.search(r'(\d+)\s*m', v)
+    if mm:
+        m = int(mm.group(1))
+
+    ms = re.search(r'(\d+)\s*s', v)
+    if ms:
+        s = int(ms.group(1))
+
+    return h * 3600 + m * 60 + s
+    
+def make_launchbox_image_name(platform, rom_stem, ext):
+    """
+    Return LaunchBox-style image filename:
+    <Title>-01<ext>
+
+    If no LaunchBox Title exists for this ROM,
+    return None (never fall back to ROM filename).
+    """
+    def lb_normalize(name):
+        name = name.replace(":", "_").replace("'", "_")
+        name = re.sub(r'[<>"/\\|?*]', '', name)
+        return name.strip()
+
+    xmlfile = LAUNCHBOX_PLATFORMS.get(platform)
+    if not xmlfile:
+        return None
+
+    path = os.path.join(LAUNCHBOX_DATA_DIR, xmlfile)
+    if not os.path.exists(path):
+        return None
+
+    try:
+        tree = ET.parse(path)
+        root = tree.getroot()
+    except:
+        return None
+
+    for g in root.findall("Game"):
+        app = g.findtext("ApplicationPath", "")
+        if not app:
+            continue
+
+        app_stem = os.path.splitext(os.path.basename(app))[0]
+        if app_stem != rom_stem:
+            continue
+
+        title = g.findtext("Title", "").strip()
+        if not title:
+            return None
+
+        return f"{lb_normalize(title)}-01{ext}"
+
+    return None
+
+
+# ============================================================
+# ================== RETROARCH THUMBNAILS ====================
+# ============================================================
+
+# - Applies ONLY to thumbnail filenames
+# - ROMs, saves, logs, playlists, XML keep original characters
+# - Matching must treat sanitized and unsanitized names as equal
+
+RETROARCH_REJECTED_CHARS = '&/\\:*?"<>|'
+
+def sanitize_rom_filename(name):
+    """
+    RetroArch thumbnails ONLY.
+    Always replace '&' with '_'.
+    """
+    base, ext = os.path.splitext(name)
+    base = base.replace("&", "_")
+
+    for ch in RETROARCH_REJECTED_CHARS:
+        base = base.replace(ch, "_")
+
+    return base + ext
+
+def normalize_filename_for_match(name, *, strip_ext=True):
+    if strip_ext:
+        name, _ = os.path.splitext(name)
+
+    # Normalize Unicode (decompose + remove diacritics) then apply existing rules.
+    name = unicodedata.normalize("NFKD", name)
+    name = "".join(ch for ch in name if not unicodedata.combining(ch))
+
+    # Strip bracketed tags
+    name = re.sub(r"[\[\(].*?[\]\)]", "", name)
+
+    # RetroArch safety
+    name = name.replace("&", "_")
+
+    # Keep only ASCII alphanumerics
+    name = re.sub(r"[^a-zA-Z0-9]", "", name)
+
+    return name.lower()
+
+
+def filenames_equivalent(a, b, *, strip_ext=True):
+    if strip_ext:
+        a0, _ = os.path.splitext(a)
+        b0, _ = os.path.splitext(b)
+    else:
+        a0, b0 = a, b
+
+    # 1) exact match first
+    if a0 == b0:
+        return True
+
+    # 2) normalized fallback
+    return normalize_filename_for_match(a0, strip_ext=False) == \
+           normalize_filename_for_match(b0, strip_ext=False)
+
+
+def expand_multidisc_renames(rom_dir, old_file, new_file):
+    """
+    Expand Disc 1 rename across sibling discs.
+
+    - Disc numbers preserved
+    - Only base title changes
+    - Cue/bin safe
+    """
+    jobs = []
+
+    def sig(name):
+        n = name.lower()
+        m = re.search(r"\b(disc|disk|cd)\s*(\d+)\b", n)
+        disc = int(m.group(2)) if m else None
+        base = re.sub(r"\b(disc|disk|cd)\s*\d+\b", "", n)
+        base = re.sub(r"\s+", " ", base).strip()
+        return base, disc
+
+    old_base, old_disc = sig(old_file)
+    _, new_disc = sig(new_file)
+
+    if not old_disc or not new_disc:
+        return [(rom_dir, old_file, new_file)]
+
+    def replace_disc_number(template, disc_num):
+        def repl(m):
+            return f"{m.group(1)}{disc_num}"
+
+        return re.sub(
+            r"\b((?:disc|disk|cd)\s*)\d+\b",
+            repl,
+            template,
+            flags=re.I
+        )
+
+    for fname in os.listdir(rom_dir):
+        fbase, fdisc = sig(fname)
+
+        if fdisc is None or fbase != old_base:
+            continue
+
+        new_name = replace_disc_number(new_file, fdisc)
+        jobs.append((rom_dir, fname, new_name))
+
+    return jobs
 
 # ============================================================
 # ========================= DATABASE =========================
@@ -766,7 +984,7 @@ def replace_lines_in_file(path, replacements):
 
 
 # ============================================================
-# ===================== PLAYTIME READERS =====================
+# ===================== PLAYTIME LOADERS =====================
 # ============================================================
 
 def format_playtime(seconds):
@@ -802,61 +1020,71 @@ def load_retroarch_playtime():
     if not os.path.isdir(logs_root):
         return out
 
-    allowed_roots = [logs_root]
+    # ----------------------------------
+    # Build allowed roots explicitly
+    # ----------------------------------
+    allowed_roots = []
+
+    # root logs dir
+    allowed_roots.append(logs_root)
 
     for platform, system in PLATFORM_TO_SYSTEM.items():
+        # platform logs
         plat_dir = os.path.join(logs_root, platform)
         if os.path.isdir(plat_dir):
             allowed_roots.append(plat_dir)
 
-        cores = SYSTEM_TO_CORES.get(system, [])
-        for core in cores:
+        # core logs
+        for core in SYSTEM_TO_CORES.get(system, []):
             core_dir = os.path.join(logs_root, core)
             if os.path.isdir(core_dir):
                 allowed_roots.append(core_dir)
 
+    # ----------------------------------
+    # Scan allowed roots only
+    # ----------------------------------
     for root in allowed_roots:
-        for _, _, files in os.walk(root):
+        for dirpath, _, files in os.walk(root):
             for fname in files:
                 if not fname.lower().endswith(".lrtl"):
                     continue
 
-                path = os.path.join(root, fname)
+                path = os.path.join(dirpath, fname)
                 rom = os.path.splitext(fname)[0]
 
                 try:
                     with open(path, "r", encoding="utf-8") as f:
                         data = json.load(f)
+                except:
+                    continue
 
-                    runtime = data.get("runtime", "")
-                    last = data.get("last_played", "")
+                runtime = data.get("runtime", "")
+                last = data.get("last_played", "")
 
-                    # Parse H:MM:SS
-                    seconds = 0
-                    if runtime:
-                        parts = runtime.split(":")
-                        if len(parts) == 3:
+                # ---------- runtime ----------
+                seconds = 0
+                if runtime:
+                    parts = runtime.split(":")
+                    if len(parts) == 3:
+                        try:
                             h, m, s = map(int, parts)
                             seconds = h * 3600 + m * 60 + s
-
-                    # Normalize last_played (RetroArch stores UNIX timestamp)
-                    if last:
-                        try:
-                            last = datetime.datetime.fromtimestamp(
-                                int(last)
-                            ).strftime("%Y-%m-%d %H:%M:%S")
                         except:
-                            last = ""
+                            seconds = 0
 
-                    out[rom] = {
-                        "seconds": seconds,
-                        "last_played": last
-                    }
+                # ---------- last_played ----------
+                if isinstance(last, str):
+                    last = last.strip()
+                else:
+                    last = ""
 
-                except Exception:
-                    pass
+                out[rom] = {
+                    "seconds": seconds,
+                    "last_played": last
+                }
 
     return out
+
 
 # ---------- Dolphin ----------
 
@@ -925,331 +1153,6 @@ def load_pcsx2_playtime():
 
     return data
 
-
-# ---------- LaunchBox ----------
-
-def normalize_launchbox_time(s):
-    if not s:
-        return ""
-    if "+" in s:
-        s = s.split("+", 1)[0]
-    if "." in s:
-        s = s.split(".", 1)[0]
-    if "T" in s:
-        s = s.replace("T", " ", 1)
-    return s.strip()
-
-def load_launchbox_lastplayed():
-    data = {}
-
-    for xml in LAUNCHBOX_PLATFORMS.values():
-        path = os.path.join(LAUNCHBOX_DATA_DIR, xml)
-        if not os.path.exists(path):
-            continue
-
-        try:
-            tree = ET.parse(path)
-            root = tree.getroot()
-        except:
-            continue
-
-        for g in root.findall("Game"):
-            gameid = g.findtext("Version", "").strip()
-            last = g.findtext("LastPlayedDate", "").strip()
-            if gameid and last:
-                data[gameid] = normalize_launchbox_time(last)
-
-    return data
-
-# ============================================================
-# ===================== PLAYTIME WRITERS =====================
-# ============================================================
-
-def indent_xml(elem, level=0):
-    """
-    In-place pretty printer for ElementTree.
-    Ensures each element (including </Game>) is on its own line.
-    """
-    i = "\n" + level * "  "
-    if len(elem):
-        if not elem.text or not elem.text.strip():
-            elem.text = i + "  "
-        for e in elem:
-            indent_xml(e, level + 1)
-        if not e.tail or not e.tail.strip():
-            e.tail = i
-    if level and (not elem.tail or not elem.tail.strip()):
-        elem.tail = i
-
-# ---------- RetroArch ----------
-
-def write_retroarch_time(filename, seconds, lastplayed):
-    base = os.path.splitext(filename)[0]
-    path = os.path.join(RETROARCH_LOG_DIR, base + ".lrtl")
-
-    if not os.path.exists(path):
-        return
-
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except:
-        return
-
-    h = seconds // 3600
-    m = (seconds % 3600) // 60
-    s = seconds % 60
-    data["runtime"] = f"{h}:{m:02}:{s:02}"
-
-    if lastplayed:
-        data["last_played"] = lastplayed
-
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-
-
-# ---------- LaunchBox ----------
-
-def write_launchbox_windows_time(title_candidates, seconds, lastplayed):
-    """
-    Write playtime / last-played to LaunchBox Windows.xml
-    using Title-based matching.
-    """
-    xmlfile = LAUNCHBOX_PLATFORMS.get("Windows")
-    if not xmlfile:
-        return
-
-    path = os.path.join(LAUNCHBOX_DATA_DIR, xmlfile)
-    if not os.path.exists(path):
-        return
-
-    try:
-        tree = ET.parse(path)
-        root = tree.getroot()
-    except:
-        return
-
-    # --- normalize lastplayed ---
-    norm_lastplayed = ""
-    if lastplayed:
-        s = str(lastplayed).strip()
-        if s.isdigit():
-            try:
-                norm_lastplayed = datetime.datetime.fromtimestamp(
-                    int(s)
-                ).strftime("%Y-%m-%dT%H:%M:%S")
-            except:
-                norm_lastplayed = ""
-        else:
-            if " " in s:
-                s = s.replace(" ", "T", 1)
-            norm_lastplayed = s
-
-    titles_lower = [t.lower() for t in title_candidates]
-    changed = False
-
-    for g in root.findall("Game"):
-        title = g.findtext("Title", "")
-        if not title:
-            continue
-
-        if title.lower() not in titles_lower:
-            continue
-
-        if seconds:
-            pt = g.find("PlayTime")
-            if pt is None:
-                pt = ET.SubElement(g, "PlayTime")
-            pt.text = str(seconds)
-            changed = True
-
-        if norm_lastplayed:
-            lp = g.find("LastPlayedDate")
-            if lp is None:
-                lp = ET.SubElement(g, "LastPlayedDate")
-            lp.text = norm_lastplayed
-            changed = True
-
-        break  # only ever update one Windows entry
-
-    if changed:
-        indent_xml(root)
-        tree.write(path, encoding="utf-8", xml_declaration=True)
-
-def write_launchbox_time(platform, _gameid, filename, seconds, lastplayed):
-    """
-    Write playtime / last-played data to LaunchBox XML.
-
-    Matching is performed by ROM filename (ApplicationPath),
-    NOT by GameID. GameID is ignored by design.
-    """
-    xmlfile = LAUNCHBOX_PLATFORMS.get(platform)
-    if not xmlfile:
-        return
-
-    path = os.path.join(LAUNCHBOX_DATA_DIR, xmlfile)
-    if not os.path.exists(path):
-        return
-
-    try:
-        tree = ET.parse(path)
-        root = tree.getroot()
-    except:
-        return
-
-    romname = os.path.basename(filename).lower()
-    changed = False
-
-    # --- normalize lastplayed ---
-    norm_lastplayed = ""
-    if lastplayed:
-        s = str(lastplayed).strip()
-        if s.isdigit():
-            try:
-                norm_lastplayed = datetime.datetime.fromtimestamp(
-                    int(s)
-                ).strftime("%Y-%m-%dT%H:%M:%S")
-            except:
-                norm_lastplayed = ""
-        else:
-            if " " in s:
-                s = s.replace(" ", "T", 1)
-            norm_lastplayed = s
-
-    for g in root.findall("Game"):
-        app = g.findtext("ApplicationPath", "")
-        if not app:
-            continue
-
-        app_base = os.path.basename(app).lower()
-        if app_base != romname:
-            continue
-
-        if seconds:
-            pt = g.find("PlayTime")
-            if pt is None:
-                pt = ET.SubElement(g, "PlayTime")
-            pt.text = str(seconds)
-            changed = True
-
-        if norm_lastplayed:
-            lp = g.find("LastPlayedDate")
-            if lp is None:
-                lp = ET.SubElement(g, "LastPlayedDate")
-            lp.text = norm_lastplayed
-            changed = True
-
-    if changed:
-        indent_xml(root)
-        tree.write(path, encoding="utf-8", xml_declaration=True)
-
-
-
-# ---------- Dolphin ----------
-
-def write_dolphin_time(gameid, seconds):
-    if not os.path.exists(DOLPHIN_PLAYTIME):
-        return
-
-    try:
-        ms = int(seconds) * 1000
-    except:
-        return
-
-    hexval = "0x" + format(ms, "016x")
-
-    lines = []
-    found = False
-    in_block = False
-
-    with open(DOLPHIN_PLAYTIME, "r", encoding="utf-8") as f:
-        for line in f:
-            raw = line.rstrip("\n")
-
-            if raw.strip() == "[TimePlayed]":
-                in_block = True
-                lines.append(raw)
-                continue
-
-            if in_block and raw.startswith("["):
-                if not found:
-                    lines.append(f"{gameid} = {hexval}")
-                    found = True
-                in_block = False
-
-            if in_block and raw.strip().startswith(gameid + " "):
-                lines.append(f"{gameid} = {hexval}")
-                found = True
-            else:
-                lines.append(raw)
-
-    if not found:
-        out = []
-        for l in lines:
-            out.append(l)
-            if l.strip() == "[TimePlayed]":
-                out.append(f"{gameid} = {hexval}")
-        lines = out
-
-    with open(DOLPHIN_PLAYTIME, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
-
-
-# ---------- PCSX2 ----------
-
-def detect_newline(path):
-    with open(path, "rb") as f:
-        data = f.read()
-    return b"\r\n" if b"\r\n" in data else b"\n"
-
-def format_pcsx2_line(gameid, seconds, lastplayed):
-    gid  = str(gameid).ljust(33)[:33]
-    secs = str(int(seconds)).ljust(21)[:21]
-
-    if lastplayed:
-        try:
-            ts = int(datetime.datetime.fromisoformat(lastplayed).timestamp())
-        except:
-            ts = 0
-    else:
-        ts = 0
-
-    last = str(ts).ljust(20)[:20]
-    return gid + secs + last
-
-def write_pcsx2_time(gameid, seconds, lastplayed):
-    if not os.path.exists(PCSX2_PLAYTIME):
-        return
-
-    newline = detect_newline(PCSX2_PLAYTIME)
-    new_line = format_pcsx2_line(gameid, seconds, lastplayed).encode("ascii")
-
-    with open(PCSX2_PLAYTIME, "rb") as f:
-        raw = f.read()
-
-    lines = raw.split(b"\r\n" if newline == b"\r\n" else b"\n")
-
-    out = []
-    found = False
-
-    for l in lines:
-        if not l.strip():
-            continue
-
-        gid = l[:33].decode("ascii", errors="ignore").strip()
-
-        if gid == gameid:
-            out.append(new_line)
-            found = True
-        else:
-            out.append(l)
-
-    if not found:
-        out.append(new_line)
-
-    with open(PCSX2_PLAYTIME, "wb") as f:
-        f.write(newline.join(out) + newline)
-  
 # ---------- Minecraft ----------
   
 def load_minecraft_playtime():
@@ -1377,6 +1280,804 @@ def load_wow_playtime(root):
 
     return seconds, last_played
 
+# ---------- LaunchBox ----------
+
+def normalize_launchbox_time(s):
+    if not s:
+        return ""
+    if "+" in s:
+        s = s.split("+", 1)[0]
+    if "." in s:
+        s = s.split(".", 1)[0]
+    if "T" in s:
+        s = s.replace("T", " ", 1)
+    return s.strip()
+
+def load_launchbox_lastplayed():
+    data = {}
+
+    for xml in LAUNCHBOX_PLATFORMS.values():
+        path = os.path.join(LAUNCHBOX_DATA_DIR, xml)
+        if not os.path.exists(path):
+            continue
+
+        try:
+            tree = ET.parse(path)
+            root = tree.getroot()
+        except:
+            continue
+
+        for g in root.findall("Game"):
+            app = g.findtext("ApplicationPath", "").strip()
+            last = g.findtext("LastPlayedDate", "").strip()
+
+            if not app or not last:
+                continue
+
+            # Use filename stem as key (no Version)
+            fname = os.path.basename(app)
+            stem, _ = os.path.splitext(fname)
+            if not stem:
+                continue
+
+            data[stem] = normalize_launchbox_time(last)
+
+    return data
+
+
+# ============================================================
+# ===================== PLAYTIME WRITERS =====================
+# ============================================================
+
+def indent_xml(elem, level=0):
+    """
+    In-place pretty printer for ElementTree.
+    Ensures each element (including </Game>) is on its own line.
+    """
+    i = "\n" + level * "  "
+    if len(elem):
+        if not elem.text or not elem.text.strip():
+            elem.text = i + "  "
+        for e in elem:
+            indent_xml(e, level + 1)
+        if not e.tail or not e.tail.strip():
+            e.tail = i
+    if level and (not elem.tail or not elem.tail.strip()):
+        elem.tail = i
+
+# ---------- RetroArch ----------
+
+def write_retroarch_time(filename, seconds, lastplayed):
+    base = os.path.splitext(filename)[0]
+    path = os.path.join(RETROARCH_LOG_DIR, base + ".lrtl")
+
+    if not os.path.exists(path):
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except:
+        return
+
+    h = seconds // 3600
+    m = (seconds % 3600) // 60
+    s = seconds % 60
+    data["runtime"] = f"{h}:{m:02}:{s:02}"
+
+    if lastplayed:
+        data["last_played"] = lastplayed
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+# ---------- LaunchBox ----------
+
+def write_launchbox_windows_time(title_candidates, seconds, lastplayed):
+    """
+    Write playtime / last-played to LaunchBox Windows.xml
+    using Title-based matching.
+    """
+    xmlfile = LAUNCHBOX_PLATFORMS.get("Windows")
+    if not xmlfile:
+        return
+
+    path = os.path.join(LAUNCHBOX_DATA_DIR, xmlfile)
+    if not os.path.exists(path):
+        return
+
+    try:
+        tree = ET.parse(path)
+        root = tree.getroot()
+    except:
+        return
+
+    # --- normalize lastplayed ---
+    norm_lastplayed = ""
+    if lastplayed:
+        s = str(lastplayed).strip()
+        if s.isdigit():
+            try:
+                norm_lastplayed = datetime.datetime.fromtimestamp(
+                    int(s)
+                ).strftime("%Y-%m-%dT%H:%M:%S")
+            except:
+                norm_lastplayed = ""
+        else:
+            if " " in s:
+                s = s.replace(" ", "T", 1)
+            norm_lastplayed = s
+
+    titles_lower = [t.lower() for t in title_candidates]
+    changed = False
+
+    for g in root.findall("Game"):
+        title = g.findtext("Title", "")
+        if not title:
+            continue
+
+        if title.lower() not in titles_lower:
+            continue
+
+        if seconds:
+            pt = g.find("PlayTime")
+            if pt is None:
+                pt = ET.SubElement(g, "PlayTime")
+            pt.text = str(seconds)
+            changed = True
+
+        if norm_lastplayed:
+            lp = g.find("LastPlayedDate")
+            if lp is None:
+                lp = ET.SubElement(g, "LastPlayedDate")
+            lp.text = norm_lastplayed
+            changed = True
+
+        break  # only ever update one Windows entry
+
+    if changed:
+        indent_xml(root)
+        tree.write(path, encoding="utf-8", xml_declaration=True)
+
+def write_launchbox_time(platform, _gameid, filename, seconds, lastplayed):
+    """
+    Write playtime / last-played data to LaunchBox XML.
+    Matching is performed by ROM filename (ApplicationPath),
+    """
+    xmlfile = LAUNCHBOX_PLATFORMS.get(platform)
+    if not xmlfile:
+        return
+
+    path = os.path.join(LAUNCHBOX_DATA_DIR, xmlfile)
+    if not os.path.exists(path):
+        return
+
+    try:
+        tree = ET.parse(path)
+        root = tree.getroot()
+    except:
+        return
+
+    romname = os.path.basename(filename).lower()
+    changed = False
+
+    # --- normalize lastplayed ---
+    norm_lastplayed = ""
+    if lastplayed:
+        s = str(lastplayed).strip()
+        if s.isdigit():
+            try:
+                norm_lastplayed = datetime.datetime.fromtimestamp(
+                    int(s)
+                ).strftime("%Y-%m-%dT%H:%M:%S")
+            except:
+                norm_lastplayed = ""
+        else:
+            if " " in s:
+                s = s.replace(" ", "T", 1)
+            norm_lastplayed = s
+
+    for g in root.findall("Game"):
+        app = g.findtext("ApplicationPath", "")
+        if not app:
+            continue
+
+        app_base = os.path.basename(app).lower()
+        if app_base != romname:
+            continue
+
+        if seconds:
+            pt = g.find("PlayTime")
+            if pt is None:
+                pt = ET.SubElement(g, "PlayTime")
+            pt.text = str(seconds)
+            changed = True
+
+        if norm_lastplayed:
+            lp = g.find("LastPlayedDate")
+            if lp is None:
+                lp = ET.SubElement(g, "LastPlayedDate")
+            lp.text = norm_lastplayed
+            changed = True
+
+    if changed:
+        indent_xml(root)
+        tree.write(path, encoding="utf-8", xml_declaration=True)
+
+# ---------- Dolphin ----------
+
+def write_dolphin_time(gameid, seconds):
+    if not os.path.exists(DOLPHIN_PLAYTIME):
+        return
+
+    try:
+        ms = int(seconds) * 1000
+    except:
+        return
+
+    hexval = "0x" + format(ms, "016x")
+
+    lines = []
+    found = False
+    in_block = False
+
+    with open(DOLPHIN_PLAYTIME, "r", encoding="utf-8") as f:
+        for line in f:
+            raw = line.rstrip("\n")
+
+            if raw.strip() == "[TimePlayed]":
+                in_block = True
+                lines.append(raw)
+                continue
+
+            if in_block and raw.startswith("["):
+                if not found:
+                    lines.append(f"{gameid} = {hexval}")
+                    found = True
+                in_block = False
+
+            if in_block and raw.strip().startswith(gameid + " "):
+                lines.append(f"{gameid} = {hexval}")
+                found = True
+            else:
+                lines.append(raw)
+
+    if not found:
+        out = []
+        for l in lines:
+            out.append(l)
+            if l.strip() == "[TimePlayed]":
+                out.append(f"{gameid} = {hexval}")
+        lines = out
+
+    with open(DOLPHIN_PLAYTIME, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+# ---------- PCSX2 ----------
+
+def format_pcsx2_line(gameid, seconds, lastplayed):
+    gid  = str(gameid).ljust(33)[:33]
+    secs = str(int(seconds)).ljust(21)[:21]
+
+    if lastplayed:
+        try:
+            ts = int(datetime.datetime.fromisoformat(lastplayed).timestamp())
+        except:
+            ts = 0
+    else:
+        ts = 0
+
+    last = str(ts).ljust(20)[:20]
+    return gid + secs + last
+
+def write_pcsx2_time(gameid, seconds, lastplayed):
+    if not os.path.exists(PCSX2_PLAYTIME):
+        return
+
+    with open(PCSX2_PLAYTIME, "rb") as f:
+        raw = f.read()
+
+    newline = b"\r\n" if b"\r\n" in raw else b"\n"
+    new_line = format_pcsx2_line(gameid, seconds, lastplayed).encode("ascii")
+
+    lines = raw.split(newline)
+
+    out = []
+    found = False
+
+    for l in lines:
+        if not l.strip():
+            continue
+
+        gid = l[:33].decode("ascii", errors="ignore").strip()
+
+        if gid == gameid:
+            out.append(new_line)
+            found = True
+        else:
+            out.append(l)
+
+    if not found:
+        out.append(new_line)
+
+    with open(PCSX2_PLAYTIME, "wb") as f:
+        f.write(newline.join(out) + newline)
+
+# ============================================================
+# ================== SCREENSHOT SYNC ENGINE ==================
+# ============================================================
+
+_COMPRESSED_IMAGE_CACHE = {}
+def compress_and_copy_image(src, dst):
+
+    TARGET_WIDTH = None
+    TARGET_HEIGHT = 1080
+    BITS_PER_CHANNEL = 6
+
+    PNGQUANT_PATH = "pngquant.exe"
+    PNGQUANT_QUALITY = "60-90"
+
+    def compute_target_size(w, h):
+        if TARGET_WIDTH and TARGET_HEIGHT:
+            return TARGET_WIDTH, TARGET_HEIGHT
+        if TARGET_WIDTH:
+            scale = TARGET_WIDTH / w
+            return TARGET_WIDTH, int(h * scale)
+        if TARGET_HEIGHT:
+            scale = TARGET_HEIGHT / h
+            return int(w * scale), TARGET_HEIGHT
+        return w, h
+
+    def reduce_bit_depth(img, bits):
+        if bits >= 8:
+            return img
+
+        levels = 1 << bits
+        step = 256 // levels
+
+        def q(v):
+            return min(255, (v // step) * step)
+
+        if img.mode == "RGBA":
+            r, g, b, a = img.split()
+            return Image.merge("RGBA", (r.point(q), g.point(q), b.point(q), a))
+
+        if img.mode == "RGB":
+            r, g, b = img.split()
+            return Image.merge("RGB", (r.point(q), g.point(q), b.point(q)))
+
+        return img
+
+    cached = _COMPRESSED_IMAGE_CACHE.get(src)
+    if cached is not None:
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        with open(dst, "wb") as f:
+            f.write(cached)
+        return True
+
+    with Image.open(src) as img:
+        img = img.convert("RGBA")
+        tw, th = compute_target_size(*img.size)
+        img = img.resize((tw, th), Image.BICUBIC)
+
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        data = buf.getvalue()
+
+    if shutil.which(PNGQUANT_PATH):
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        with open(dst, "wb") as f:
+            f.write(data)
+
+        subprocess.run(
+            [
+                PNGQUANT_PATH,
+                "--force",
+                "--quality", PNGQUANT_QUALITY,
+                "--speed", "1",
+                "--output", dst,
+                "--", dst,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+
+        with open(dst, "rb") as f:
+            final = f.read()
+    else:
+        img = Image.open(BytesIO(data))
+        img = reduce_bit_depth(img, BITS_PER_CHANNEL)
+
+        buf = BytesIO()
+        img.save(buf, format="PNG", optimize=True, compress_level=7)
+        final = buf.getvalue()
+
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        with open(dst, "wb") as f:
+            f.write(final)
+
+    _COMPRESSED_IMAGE_CACHE[src] = final
+    return True
+
+def sync_screenshots(mode, src_key):
+    rows = load_local()
+    if not rows:
+        print("local_games.txt not found or empty.")
+        return
+
+    image_exts = (".png", ".jpg", ".jpeg")
+    ps2_id_pat = re.compile(VALID_GAMEID_PATTERNS[1], re.I)
+
+    def normalize_id(s):
+        return re.sub(r"[_\-.]", "", s.upper())
+
+    def strip_lb_suffix(name):
+        return re.sub(r"-\d+$", "", name)
+
+    # ==================================================
+    # LOAD LAUNCHBOX TITLES (ROM stem → Title)
+    # ==================================================
+    lb_title_map = {}
+
+    if src_key in ("RA", "LB"):
+        for plat, xmlfile in LAUNCHBOX_PLATFORMS.items():
+            path = os.path.join(LAUNCHBOX_DATA_DIR, xmlfile)
+            if not os.path.exists(path):
+                continue
+
+            try:
+                tree = ET.parse(path)
+                root = tree.getroot()
+            except:
+                continue
+
+            for g in root.findall("Game"):
+                app = g.findtext("ApplicationPath", "").strip()
+                title = g.findtext("Title", "").strip()
+
+                if not app or not title:
+                    continue
+
+                stem = os.path.splitext(os.path.basename(app))[0]
+                lb_title_map[stem] = title
+
+    copied_paths = []
+
+    for line in rows:
+        try:
+            platform, _, gameid, file = [x.strip() for x in line.split("|")]
+        except:
+            continue
+
+        rom_stem = os.path.splitext(os.path.basename(file))[0]
+        lb_title = lb_title_map.get(rom_stem)
+        src = None
+
+        # --------------------------------------------------
+        # LaunchBox gameplay images → RetroArch
+        # --------------------------------------------------
+        if src_key == "LB":
+            root = os.path.join(LAUNCHBOX_IMG_DIR, platform, LAUNCHBOX_SCREEN_SUBDIR)
+            if os.path.isdir(root):
+
+                # 1) ROM filename priority
+                for f in os.listdir(root):
+                    b, e = os.path.splitext(f)
+                    if e.lower() in image_exts and filenames_equivalent(
+                        strip_lb_suffix(b), rom_stem, strip_ext=False
+                    ):
+                        src = os.path.join(root, f)
+                        break
+
+                # 2) LaunchBox XML title fallback
+                if not src and lb_title:
+                    for f in os.listdir(root):
+                        b, e = os.path.splitext(f)
+                        if e.lower() in image_exts and filenames_equivalent(
+                            strip_lb_suffix(b), lb_title, strip_ext=False
+                        ):
+                            src = os.path.join(root, f)
+                            break
+
+        # --------------------------------------------------
+        # RetroArch gameplay thumbnails → LaunchBox
+        # --------------------------------------------------
+        if not src and src_key == "RA":
+            root = os.path.join(RETROARCH_IMG_DIR, platform, RETROARCH_SCREEN_SUBDIR)
+            if os.path.isdir(root):
+
+                # 1) LaunchBox XML title priority
+                if lb_title:
+                    for f in os.listdir(root):
+                        b, e = os.path.splitext(f)
+                        if e.lower() in image_exts and filenames_equivalent(
+                            strip_lb_suffix(b), lb_title, strip_ext=False
+                        ):
+                            src = os.path.join(root, f)
+                            break
+
+                # 2) ROM filename fallback
+                if not src:
+                    for f in os.listdir(root):
+                        b, e = os.path.splitext(f)
+                        if e.lower() in image_exts and filenames_equivalent(
+                            b, sanitize_rom_filename(rom_stem), strip_ext=False
+                        ):
+                            src = os.path.join(root, f)
+                            break
+
+        # --------------------------------------------------
+        # RetroArch raw screenshots
+        # --------------------------------------------------
+        if not src and src_key in ("RA_RAW", "ALL"):
+            root = os.path.join(RETROARCH_SCREEN_DIR, platform)
+            if os.path.isdir(root):
+                for r, _, files in os.walk(root):
+                    for f in files:
+                        b, e = os.path.splitext(f)
+                        if e.lower() in image_exts and re.sub(
+                            r"-\d{6}-\d{6}$", "", b
+                        ) == rom_stem:
+                            src = os.path.join(r, f)
+                            break
+                    if src:
+                        break
+
+        # --------------------------------------------------
+        # Dolphin screenshots
+        # --------------------------------------------------
+        if not src and src_key in ("DOLPHIN", "ALL"):
+            root = os.path.join(DOLPHIN_SCREEN_DIR, gameid)
+            if os.path.isdir(root):
+                for f in os.listdir(root):
+                    if f.lower().endswith(image_exts):
+                        src = os.path.join(root, f)
+                        break
+
+        # --------------------------------------------------
+        # PCSX2 screenshots
+        # --------------------------------------------------
+        if not src and src_key in ("PCSX2", "ALL"):
+            if os.path.isdir(PCSX2_SCREEN_DIR):
+                for f in os.listdir(PCSX2_SCREEN_DIR):
+                    if not f.lower().endswith(image_exts):
+                        continue
+                    m = ps2_id_pat.search(f)
+                    if m and normalize_id(m.group(0)) == normalize_id(gameid):
+                        src = os.path.join(PCSX2_SCREEN_DIR, f)
+                        break
+
+        if not src:
+            continue
+
+        ext = os.path.splitext(src)[1]
+
+        temp_src = None
+        if mode == 3 and src_key in ("RA_RAW", "DOLPHIN", "PCSX2", "ALL"):
+            temp_src = os.path.join(
+                os.path.dirname(__file__),
+                f"__tmp_{os.getpid()}_{rom_stem}.png"
+            )
+            compress_and_copy_image(src, temp_src)
+
+        targets = [mode] if mode in (1, 2) else [1, 2]
+
+        for t in targets:
+            if t == 1:
+                tgt_root = os.path.join(
+                    LAUNCHBOX_IMG_DIR, platform, LAUNCHBOX_SCREEN_SUBDIR
+                )
+                name = make_launchbox_image_name(platform, rom_stem, ext)
+                if not name:
+                    continue
+                os.makedirs(tgt_root, exist_ok=True)
+
+            else:
+                tgt_platform_root = os.path.join(RETROARCH_IMG_DIR, platform)
+
+                if not os.path.isdir(tgt_platform_root) and src_key == "ALL" and SYNC_BOTH_ACTIVE:
+                    continue
+
+                tgt_root = os.path.join(
+                    tgt_platform_root, RETROARCH_SCREEN_SUBDIR
+                )
+                os.makedirs(tgt_root, exist_ok=True)
+                name = sanitize_rom_filename(rom_stem) + ext
+
+            dst = os.path.join(tgt_root, name)
+
+            if temp_src:
+                shutil.copy2(temp_src, dst)
+            elif src_key in ("RA_RAW", "DOLPHIN", "PCSX2", "ALL"):
+                compress_and_copy_image(src, dst)
+            else:
+                shutil.copy2(src, dst)
+
+            copied_paths.append(dst)
+
+        if temp_src and os.path.exists(temp_src):
+            os.remove(temp_src)
+
+    if src_key in ("RA_RAW", "DOLPHIN", "PCSX2", "ALL"):
+        for p in copied_paths:
+            print(p)
+
+    if mode == 1:
+        print(f"Copied {len(copied_paths)} screenshots to LaunchBox gameplay picture folder.")
+    elif mode == 2:
+        print(f"Copied {len(copied_paths)} screenshots to RetroArch gameplay picture folder.")
+
+# ============================================================
+# ===================== COVER ENGINE ========================
+# ============================================================
+
+# ROMs whose covers should NOT be renamed to GameID
+# Patterns are matched against ROM filename stem (no extension)
+COVER_GAMEID_EXCEPTIONS = [
+    r"^CodeBreaker v\d+",
+]
+
+def keep_rom_named_cover(stem):
+    """
+    Return True if this ROM's cover should keep the ROM-based
+    filename instead of being renamed to GameID.
+    """
+    for pat in COVER_GAMEID_EXCEPTIONS:
+        if re.match(pat, stem, re.I):
+            return True
+    return False
+
+def sync_covers(src_name, src_root, tgt_name, tgt_root):
+    rows = load_playtime_export()
+    if not rows:
+        print("playtime_export.txt not found or empty.")
+        return
+
+    local_rows = load_local()
+    allowed_platforms = set()
+
+    for line in local_rows:
+        try:
+            platform, _, _, _ = [x.strip() for x in line.split("|", 3)]
+            allowed_platforms.add(platform)
+        except:
+            continue
+
+    if tgt_name == "PCSX2":
+        allowed_platforms &= set(SYSTEMS["PS2"]["platforms"])
+    elif tgt_name == "Dolphin":
+        allowed_platforms &= set(
+            SYSTEMS["GC"]["platforms"] + SYSTEMS["WII"]["platforms"]
+        )
+
+    def strip_lb_suffix(name):
+        return re.sub(r"-\d+$", "", name)
+
+    def norm(s):
+        return re.sub(r"[^A-Z0-9]", "", s.upper())
+
+    # --------------------------------------------------
+    # Load LaunchBox ROM stem → Title map
+    # --------------------------------------------------
+    lb_title_map = {}
+
+    if tgt_name == "LaunchBox":
+        for platform, xmlfile in LAUNCHBOX_PLATFORMS.items():
+            path = os.path.join(LAUNCHBOX_DATA_DIR, xmlfile)
+            if not os.path.exists(path):
+                continue
+            try:
+                tree = ET.parse(path)
+                root = tree.getroot()
+            except:
+                continue
+
+            for g in root.findall("Game"):
+                app = g.findtext("ApplicationPath", "").strip()
+                title = g.findtext("Title", "").strip()
+                if not app or not title:
+                    continue
+                stem = os.path.splitext(os.path.basename(app))[0]
+                lb_title_map[(platform, stem)] = title
+
+    entries = []
+    for line in rows:
+        try:
+            platform, _, gameid, _, _, file = [x.strip() for x in line.split("|")]
+            if platform in allowed_platforms:
+                entries.append((platform, gameid, file))
+        except:
+            continue
+
+    copied = 0
+    image_exts = (".png", ".jpg", ".jpeg", ".webp")
+
+    for platform, gameid, file in entries:
+        rom_stem = os.path.splitext(os.path.basename(file))[0]
+        src = None
+
+        # --------------------------------------------------
+        # Resolve source directory
+        # --------------------------------------------------
+        if src_name == "LaunchBox":
+            src_dir = os.path.join(src_root, platform, LAUNCHBOX_COVER_SUBDIR)
+        elif src_name == "RetroArch":
+            src_dir = os.path.join(src_root, platform, RETROARCH_COVER_SUBDIR)
+        else:
+            src_dir = src_root
+
+        # --------------------------------------------------
+        # Dolphin: flat directory, filenames are GameID.png
+        # --------------------------------------------------
+        if src_name == "Dolphin" and os.path.isdir(src_dir):
+            gid = norm(gameid)
+            for fname in os.listdir(src_dir):
+                base, ext = os.path.splitext(fname)
+                if ext.lower() in image_exts and norm(base) == gid:
+                    src = os.path.join(src_dir, fname)
+                    break
+
+        # --------------------------------------------------
+        # PCSX2: flat directory, filenames are GameID
+        # --------------------------------------------------
+        if not src and src_name == "PCSX2" and os.path.isdir(src_dir):
+            gid = norm(gameid)
+            for fname in os.listdir(src_dir):
+                base, ext = os.path.splitext(fname)
+                if ext.lower() in image_exts and norm(base) == gid:
+                    src = os.path.join(src_dir, fname)
+                    break
+
+        # --------------------------------------------------
+        # Title-based fallback (LB / RA sources only)
+        # --------------------------------------------------
+        if not src:
+            lb_title = lb_title_map.get((platform, rom_stem))
+            if lb_title and os.path.isdir(src_dir):
+                for fname in os.listdir(src_dir):
+                    base, ext = os.path.splitext(fname)
+                    if ext.lower() not in image_exts:
+                        continue
+                    if filenames_equivalent(strip_lb_suffix(base), lb_title, strip_ext=False):
+                        src = os.path.join(src_dir, fname)
+                        break
+
+        if not src:
+            continue
+
+        ext = os.path.splitext(src)[1]
+
+        # --------------------------------------------------
+        # Target naming
+        # --------------------------------------------------
+        if tgt_name == "LaunchBox":
+            tgt_dir = os.path.join(tgt_root, platform, LAUNCHBOX_COVER_SUBDIR)
+            os.makedirs(tgt_dir, exist_ok=True)
+            dst_name = make_launchbox_image_name(platform, rom_stem, ext)
+            if not dst_name:
+                continue
+
+        elif tgt_name == "RetroArch":
+            tgt_dir = os.path.join(tgt_root, platform, RETROARCH_COVER_SUBDIR)
+            os.makedirs(tgt_dir, exist_ok=True)
+            dst_name = sanitize_rom_filename(rom_stem) + ext
+
+        else:
+            tgt_dir = tgt_root
+            dst_name = rom_stem + ext
+
+        shutil.copy2(src, os.path.join(tgt_dir, dst_name))
+        copied += 1
+
+    if tgt_name == "LaunchBox":
+        print(f"Copied {copied} covers to LaunchBox cover art folder.")
+    elif tgt_name == "RetroArch":
+        print(f"Copied {copied} covers to RetroArch cover art folder.")
+    else:
+        print(f"Copied {copied} covers.")
+
 # ============================================================
 # ===================== RENAME ENGINE ========================
 # ============================================================
@@ -1384,7 +2085,6 @@ def load_wow_playtime(root):
 STEM_RE = re.compile(r"^(.*\.)[^.]+$")
 BIN_TRACK_RE = re.compile(r"^(.*?)(\s+\(Track\s+\d+\))\.bin$", re.I)
 CUE_RE = re.compile(r"^(.*)\.cue$", re.I)
-
 
 # ---------- Stem helpers ----------
 
@@ -1400,7 +2100,6 @@ def bin_base(filename):
     if not m:
         return None, None
     return m.group(1), m.group(2)
-
 
 # ---------- Rename plans ----------
 
@@ -1422,27 +2121,32 @@ def build_rom_rename_plan(rom_dir, old_filename, new_filename):
         oldCueBase = cue_base(old_filename)
         newCueBase = cue_base(new_filename)
 
-    for fname in os.listdir(rom_dir):
-        src = os.path.join(rom_dir, fname)
+    # --------------------------------------------------
+    # RECURSIVE SCAN (supports game subfolders)
+    # --------------------------------------------------
+    for dirpath, _, files in os.walk(rom_dir):
+        for fname in files:
+            src = os.path.join(dirpath, fname)
 
-        # Exact file rename (handles extension-only changes)
-        if fname == old_filename:
-            plan.append((src, os.path.join(rom_dir, new_filename)))
-            continue
+            # Exact file rename (handles extension-only changes)
+            if fname == old_filename:
+                plan.append((src, os.path.join(dirpath, new_filename)))
+                continue
 
-        # Normal ROM + multi-dot save files
-        if fname.startswith(oldBase + "."):
-            newName = newBase + fname[len(oldBase):]
-            if newName != fname:
-                plan.append((src, os.path.join(rom_dir, newName)))
-
-        # Cue track bins
-        if oldCue:
-            base, track = bin_base(fname)
-            if base == oldCueBase:
-                newName = newCueBase + track + ".bin"
+            # Normal ROM + multi-dot save files
+            if fname.startswith(oldBase + "."):
+                newName = newBase + fname[len(oldBase):]
                 if newName != fname:
-                    plan.append((src, os.path.join(rom_dir, newName)))
+                    plan.append((src, os.path.join(dirpath, newName)))
+                continue
+
+            # Cue track bins
+            if oldCue:
+                base, track = bin_base(fname)
+                if base == oldCueBase:
+                    newName = newCueBase + track + ".bin"
+                    if newName != fname:
+                        plan.append((src, os.path.join(dirpath, newName)))
 
     return plan
 
@@ -1461,14 +2165,8 @@ def apply_renames(rename_plan):
         os.rename(src, dst)
 
 # ---------- Save files ----------
-def rename_save_files(old_filename, new_filename):
-    """
-    Rename RetroArch save files.
 
-    IMPORTANT:
-    Saves must keep the exact ROM filename.
-    RetroArch does NOT sanitize & in save filenames.
-    """
+def rename_save_files(old_filename, new_filename, platform=None, system=None):
     saves_root = os.path.join(RETROARCH_DIR, "saves")
     if not os.path.isdir(saves_root):
         return
@@ -1476,40 +2174,80 @@ def rename_save_files(old_filename, new_filename):
     oldStem, _ = split_stem(old_filename)
     newStem, _ = split_stem(new_filename)
 
-    for dirpath, _, files in os.walk(saves_root):
-        for fname in files:
-            base, ext = os.path.splitext(fname)
+    roots = []
 
-            if base != oldStem:
-                continue
+    # root saves dir
+    roots.append(saves_root)
 
-            newName = newStem + ext
-            if newName == fname:
-                continue
+    # platform saves
+    if platform:
+        plat_dir = os.path.join(saves_root, platform)
+        if os.path.isdir(plat_dir):
+            roots.append(plat_dir)
 
-            src = os.path.join(dirpath, fname)
-            dst = os.path.join(dirpath, newName)
+    # core saves
+    if system:
+        for core in SYSTEM_TO_CORES.get(system, []):
+            core_dir = os.path.join(saves_root, core)
+            if os.path.isdir(core_dir):
+                roots.append(core_dir)
 
-            if not os.path.exists(dst):
-                os.rename(src, dst)
+    for root in roots:
+        for dirpath, _, files in os.walk(root):
+            for fname in files:
+                base, ext = os.path.splitext(fname)
+
+                if base != oldStem:
+                    continue
+
+                newName = newStem + ext
+                if newName == fname:
+                    continue
+
+                src = os.path.join(dirpath, fname)
+                dst = os.path.join(dirpath, newName)
+
+                if not os.path.exists(dst):
+                    os.rename(src, dst)
 
 # ---------- Log files ----------
-def rename_retroarch_logs(old_file, new_file):
+
+def rename_retroarch_logs(old_file, new_file, platform=None, system=None):
     oldbase = os.path.splitext(old_file)[0]
     newbase = os.path.splitext(new_file)[0]
 
     if not os.path.isdir(RETROARCH_LOG_DIR):
         return
 
-    for dirpath, _, files in os.walk(RETROARCH_LOG_DIR):
-        for fname in files:
-            if fname == oldbase + ".lrtl":
+    roots = [RETROARCH_LOG_DIR]
+
+    # platform logs
+    if platform:
+        plat_dir = os.path.join(RETROARCH_LOG_DIR, platform)
+        if os.path.isdir(plat_dir):
+            roots.append(plat_dir)
+
+    # core logs
+    if system:
+        for core in SYSTEM_TO_CORES.get(system, []):
+            core_dir = os.path.join(RETROARCH_LOG_DIR, core)
+            if os.path.isdir(core_dir):
+                roots.append(core_dir)
+
+    for root in roots:
+        for dirpath, _, files in os.walk(root):
+            for fname in files:
+                if fname != oldbase + ".lrtl":
+                    continue
+
                 src = os.path.join(dirpath, fname)
                 dst = os.path.join(dirpath, newbase + ".lrtl")
+
                 if not os.path.exists(dst):
                     os.rename(src, dst)
 
 # ---------- CUE rewriting ----------
+
 def rewrite_cue_file(cue_path, oldBase, newBase):
     lines = []
 
@@ -1531,6 +2269,7 @@ def rewrite_cue_file(cue_path, oldBase, newBase):
         f.writelines(lines)
 
 # ---------- Stem replacement ----------
+
 def replace_stem_in_file(path, oldStem, newStem):
     with open(path, "r", encoding="utf-8", errors="ignore") as f:
         text = f.read()
@@ -1577,69 +2316,8 @@ def replace_stem_in_tree(root, oldStem, newStem, exts=None):
 # ===================== MODIFY PLANNER ======================
 # ============================================================
 
-def parse_seconds(value):
-    """
-    Parse playtime into seconds.
-
-    Accepted formats:
-      - 123456
-      - 123456s
-      - 1234h
-      - 1234h 56m
-      - 1234h 56m 07s
-      - 1.234h 56m 07s   (thousands-separated hours)
-    """
-    if not value:
-        return 0
-
-    v = value.strip().lower()
-
-    # ---------- pure seconds ----------
-    if v.endswith("s") and v[:-1].isdigit():
-        return int(v[:-1])
-
-    if v.isdigit():
-        return int(v)
-
-    # ---------- h / m / s format ----------
-    h = m = s = 0
-
-    # hours (allow thousands separators)
-    mh = re.search(r'([\d\.]+)\s*h', v)
-    if mh:
-        try:
-            h = int(mh.group(1).replace(".", ""))
-        except:
-            h = 0
-
-    mm = re.search(r'(\d+)\s*m', v)
-    if mm:
-        try:
-            m = int(mm.group(1))
-        except:
-            m = 0
-
-    ms = re.search(r'(\d+)\s*s', v)
-    if ms:
-        try:
-            s = int(ms.group(1))
-        except:
-            s = 0
-
-    if h or m or s:
-        return h * 3600 + m * 60 + s
-
-    return 0
-
 def rename_platform_images(platform, old_file, new_file):
-    """
-    Rename image files whose filename stem matches the ROM filename.
 
-    Rules:
-    - Matching is tolerant (& ↔ _)
-    - RetroArch thumbnails use sanitized filename
-    - LaunchBox Images and ImagesRAW keep unsanitized filename
-    """
     oldStem, _ = os.path.splitext(old_file)
     newStem, _ = os.path.splitext(new_file)
 
@@ -1651,30 +2329,22 @@ def rename_platform_images(platform, old_file, new_file):
         if os.path.isdir(ra_root):
             roots.append(("retroarch", ra_root))
 
-    # LaunchBox Images (KEEP &)
-    if "LAUNCHBOX_IMG_DIR" in globals():
-        lb_root = os.path.join(LAUNCHBOX_IMG_DIR, platform)
-        if os.path.isdir(lb_root):
-            roots.append(("launchbox", lb_root))
-
-    # ImagesRAW (KEEP &)
-    if CONFIG_FILE == "specialconfig.txt":
-        raw_root = os.path.join(r"H:\ImagesRAW", platform)
+    # Additional raw images directory (KEEP &)
+    if ADITIONAL_IMG_DIR:
+        raw_root = os.path.join(ADITIONAL_IMG_DIR, platform)
         if os.path.isdir(raw_root):
             roots.append(("raw", raw_root))
 
     for kind, root in roots:
-        # Decide target stem per ecosystem
         if kind == "retroarch":
             targetStem = sanitize_rom_filename(newStem)
         else:
-            targetStem = newStem  # keep &
+            targetStem = newStem
 
         for dirpath, _, files in os.walk(root):
             for fname in files:
                 base, ext = os.path.splitext(fname)
 
-                # Tolerant match
                 if not filenames_equivalent(base, oldStem, strip_ext=False):
                     continue
 
@@ -1687,6 +2357,45 @@ def rename_platform_images(platform, old_file, new_file):
 
                 if not os.path.exists(dst):
                     os.rename(src, dst)
+
+    # --------------------------------------------------
+    # RetroArch RAW screenshots with timestamp suffix
+    # <ROM>-XXXXXX-XXXXXX.png
+    # --------------------------------------------------
+    if not RETROARCH_SCREEN_DIR:
+        return
+
+    plat_root = os.path.join(RETROARCH_SCREEN_DIR, platform)
+    if not os.path.isdir(plat_root):
+        return
+
+    ts_re = re.compile(r"^(.*?)(-\d{6}-\d{6})$")
+
+    for dirpath, _, files in os.walk(plat_root):
+        for fname in files:
+            base, ext = os.path.splitext(fname)
+            if ext.lower() not in (".png", ".jpg", ".jpeg"):
+                continue
+
+            m = ts_re.match(base)
+            if not m:
+                continue
+
+            stem, ts = m.groups()
+
+            if not filenames_equivalent(stem, oldStem, strip_ext=False):
+                continue
+
+            newName = newStem + ts + ext
+            if newName == fname:
+                continue
+
+            src = os.path.join(dirpath, fname)
+            dst = os.path.join(dirpath, newName)
+
+            if not os.path.exists(dst):
+                os.rename(src, dst)
+
 
 def build_modify_plans(old_lines, new_lines, local_rows, play_rows):
     def parse(row):
@@ -1809,12 +2518,13 @@ def run_modify_direct(old_lines, new_lines):
 
         system = PLATFORM_TO_SYSTEM.get(platform)
 
-        if system in ("GC", "WII"):
-            write_dolphin_time(gameid, seconds)
+        if use_standalone_emulator(system):
 
-        if system == "PS2":
-            write_pcsx2_time(gameid, seconds, lastplayed)
+            if system in ("GC", "WII"):
+                write_dolphin_time(gameid, seconds)
 
+            if system == "PS2":
+                write_pcsx2_time(gameid, seconds, lastplayed)
 
 # ============================================================
 # ===================== COMMAND ENGINE ======================
@@ -2179,7 +2889,7 @@ def cmd_change_labels():
 # ---------- Export ----------
 
 def cmd_export_playtime():
-    print("Loading playtime sources...")
+    print("Loading playtime sources.")
 
     rows = load_local()
 
@@ -2204,9 +2914,9 @@ def cmd_export_playtime():
     ]
 
     out = []
-    printed = []  # (row_color, row_plain)
+    printed = []
+    pc_rows = []
 
-    # Only used when PRINT_ALL is False
     # key -> (bracket_count, has_codeword, row_color, row_plain)
     best = {}
 
@@ -2221,25 +2931,31 @@ def cmd_export_playtime():
         seconds = 0
         last_played = ""
 
+        rom_stem = os.path.splitext(os.path.basename(file))[0]
+
         # ---------- RetroArch ----------
-        rom = os.path.splitext(os.path.basename(file))[0]
-        if rom in ra:
-            seconds = ra[rom].get("seconds", 0)
-            lp = ra[rom].get("last_played", "")
+        if rom_stem in ra:
+            seconds = ra[rom_stem].get("seconds", 0)
+            lp = ra[rom_stem].get("last_played", "")
             if lp:
                 last_played = lp
 
-        # ---------- PCSX2 ----------
-        if system == "PS2" and game_id in pcsx2:
-            seconds, lp = pcsx2[game_id]
-            if lp:
-                last_played = lp
+        # ---------- Standalone emulators ----------
+        if use_standalone_emulator(system):
 
-        # ---------- Dolphin ----------
-        if system in ("GC", "WII") and game_id in dolphin:
-            seconds = dolphin[game_id]
-            if game_id in lb:
-                last_played = lb[game_id]
+            # ---------- PCSX2 ----------
+            if system == "PS2" and game_id in pcsx2:
+                seconds, lp = pcsx2[game_id]
+                if lp:
+                    last_played = lp
+
+            # ---------- Dolphin (GC/Wii) ----------
+            elif system in ("GC", "WII") and game_id in dolphin:
+                seconds = dolphin[game_id]
+
+                # last-played now matched by ROM filename stem
+                if rom_stem in lb:
+                    last_played = lb[rom_stem]
 
         # ---------- Low-playtime filtering ----------
         if seconds < 300 and not PRINT_ALL:
@@ -2277,19 +2993,12 @@ def cmd_export_playtime():
             if prev:
                 prev_brackets, prev_has_codeword, _, _ = prev
 
-                # 1. fewer brackets wins
                 if bracket_count > prev_brackets:
                     continue
-                if bracket_count < prev_brackets:
-                    pass
-                else:
-                    # 2. no codeword wins
+                if bracket_count == prev_brackets:
                     if has_codeword and not prev_has_codeword:
                         continue
-                    if not has_codeword and prev_has_codeword:
-                        pass
-                    else:
-                        # 3. first wins
+                    if has_codeword == prev_has_codeword:
                         continue
 
             best[key] = (bracket_count, has_codeword, row_color, row_plain)
@@ -2297,16 +3006,17 @@ def cmd_export_playtime():
         else:
             printed.append((row_color, row_plain))
 
-    # ---------- Minecraft ----------
+    # =========================================================
+    # PC GAMES (COLLECT ONLY)
+    # =========================================================
+
     if minecraft:
         seconds, last_played = minecraft
-
         if seconds >= 500 or PRINT_ALL:
             row_plain = (
                 "PC - Minecraft | Minecraft Java Edition | MINECRAFT-JAVA | "
                 f"{format_playtime(seconds)} | {last_played} | Minecraft.exe"
             )
-
             row_color = (
                 f"PC - Minecraft"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} Minecraft Java Edition"
@@ -2315,20 +3025,15 @@ def cmd_export_playtime():
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {last_played}"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} Minecraft.exe"
             )
+            pc_rows.append((row_color, row_plain))
 
-            print(row_color)
-            out.append(row_plain)
-
-    # ---------- World of Warcraft (Retail) ----------
     if wow_retail:
         seconds, last_played = wow_retail
-
         if seconds >= 500 or PRINT_ALL:
             row_plain = (
                 "PC - World of Warcraft | World of Warcraft | WOW-RETAIL | "
                 f"{format_playtime(seconds)} | {last_played} | Wow.exe"
             )
-
             row_color = (
                 f"PC - World of Warcraft"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} World of Warcraft"
@@ -2337,20 +3042,15 @@ def cmd_export_playtime():
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {last_played}"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} Wow.exe"
             )
+            pc_rows.append((row_color, row_plain))
 
-            print(row_color)
-            out.append(row_plain)
-
-    # ---------- World of Warcraft (Classic Era / Events) ----------
     if wow_era:
         seconds, last_played = wow_era
-
         if seconds >= 500 or PRINT_ALL:
             row_plain = (
                 "PC - World of Warcraft | World of Warcraft Classic Era | WOW-CLASSIC-ERA | "
                 f"{format_playtime(seconds)} | {last_played} | WowClassic.exe"
             )
-
             row_color = (
                 f"PC - World of Warcraft"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} World of Warcraft Classic Era"
@@ -2359,34 +3059,29 @@ def cmd_export_playtime():
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {last_played}"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} WowClassic.exe"
             )
+            pc_rows.append((row_color, row_plain))
 
-            print(row_color)
-            out.append(row_plain)
-
-    # ---------- World of Warcraft (Classic Progression) ----------
     if wow_classic:
         seconds, last_played = wow_classic
-
         if seconds >= 500 or PRINT_ALL:
             row_plain = (
-                "PC - World of Warcraft | World of Warcraft Classic Progression | WOW-CLASSIC | "
+                "PC - World of Warcraft | World of Warcraft Classic | WOW-CLASSIC | "
                 f"{format_playtime(seconds)} | {last_played} | WowClassic.exe"
             )
-
             row_color = (
                 f"PC - World of Warcraft"
-                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} World of Warcraft Classic Progression"
+                f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} World of Warcraft Classic"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} WOW-CLASSIC"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {format_playtime(seconds)}"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} {last_played}"
                 f" {Fore.LIGHTBLACK_EX}|{Style.RESET_ALL} WowClassic.exe"
             )
+            pc_rows.append((row_color, row_plain))
 
-            print(row_color)
-            out.append(row_plain)
+    # =========================================================
+    # EMIT RESULTS
+    # =========================================================
 
-
-    # ---------- Emit results ----------
     if PRINT_ALL:
         for row_color, row_plain in printed:
             print(row_color)
@@ -2395,6 +3090,10 @@ def cmd_export_playtime():
         for _, _, row_color, row_plain in best.values():
             print(row_color)
             out.append(row_plain)
+
+    for row_color, row_plain in pc_rows:
+        print(row_color)
+        out.append(row_plain)
 
     save_playtime_export(out)
     print(f"Created {PLAYTIME_EXPORT} ({len(out)} entries)")
@@ -2460,21 +3159,610 @@ def cmd_sync():
 
     print("LaunchBox sync complete.")
 
+# ---------- Link pictures ----------
+
+def cmd_link_pictures():
+    print("\nLink pictures to Retroarch and Launchbox\n")
+
+    options = [
+        ("LaunchBox", LAUNCHBOX_IMG_DIR, True),
+        ("RetroArch", RETROARCH_IMG_DIR, True),
+        ("Additional", ADITIONAL_IMG_DIR, False),
+        ("All", None, None),
+        ("Exit", None, None),
+    ]
+
+    VALID_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
+    dash2_re = re.compile(r"-\d{2}$")
+    tag_re = re.compile(r"[\[\(].*?[\]\)]")
+
+    print("Select image source:")
+    for i, (name, path, _) in enumerate(options, 1):
+        print(f"{i}) {name}")
+        if path:
+            print(f"     {status_ok()} {path}")
+
+    choice = input("> ").strip()
+    if choice == "5":
+        return
+
+    IMAGE_SOURCES = []
+    if choice == "1":
+        IMAGE_SOURCES.append((LAUNCHBOX_IMG_DIR, True))
+    elif choice == "2":
+        IMAGE_SOURCES.append((RETROARCH_IMG_DIR, True))
+    elif choice == "3":
+        IMAGE_SOURCES.append((ADITIONAL_IMG_DIR, False))
+    elif choice == "4":
+        IMAGE_SOURCES.extend([
+            (LAUNCHBOX_IMG_DIR, True),
+            (RETROARCH_IMG_DIR, True),
+            (ADITIONAL_IMG_DIR, False),
+        ])
+    else:
+        return
+
+    rows = load_local()
+    if not rows:
+        print("local_games.txt not found or empty.")
+        return
+
+    roms_by_platform = {}
+    titles_by_platform = {}
+
+    # ==================================================
+    # LOAD LAUNCHBOX TITLES FROM XML (ROM stem → Title)
+    # Use the LAUNCHBOX_PLATFORMS mapping key (plat) as the
+    # platform key so it matches local_games.txt platform values.
+    # ==================================================
+    lb_title_map = {}
+
+    for plat, xmlfile in LAUNCHBOX_PLATFORMS.items():
+        path = os.path.join(LAUNCHBOX_DATA_DIR, xmlfile)
+        if not os.path.exists(path):
+            continue
+
+        try:
+            tree = ET.parse(path)
+            root = tree.getroot()
+        except:
+            continue
+
+        for g in root.findall("Game"):
+            app = g.findtext("ApplicationPath", "").strip()
+            title = g.findtext("Title", "").strip()
+            # intentionally use 'plat' (the LAUNCHBOX_PLATFORMS key) here
+            if not app or not title:
+                continue
+
+            stem = os.path.splitext(os.path.basename(app))[0]
+            lb_title_map.setdefault(plat, {})[stem] = title
+
+    # ==================================================
+    # normalizer helper
+    # ==================================================
+    def normalize_text(s):
+        s = unicodedata.normalize("NFKD", s)
+        s = "".join(c for c in s if not unicodedata.combining(c))
+
+        s = dash2_re.sub("", s)
+        s = tag_re.sub("", s)
+
+        s = s.lower()
+
+        # remove common leading/trailing articles anywhere
+        for article in ("the", "die", "les"):
+            s = re.sub(rf"\b{article}\b", "", s)
+
+        # remove punctuation and separators (including comma)
+        s = re.sub(r"[.,\-_\&:\[\]\(\)\s]", "", s)
+
+        return s
+
+    # Build reverse mapping: platform -> normalized title -> stem
+    title_to_stem = {}
+    for platform, m in lb_title_map.items():
+        rev = {}
+        for stem, title in m.items():
+            rev[normalize_text(title)] = stem
+            rev[title] = stem
+        title_to_stem[platform] = rev
+
+    # ==================================================
+    # LOAD ROMS FROM local_games.txt (ROM is authoritative)
+    # ==================================================
+    for line in rows:
+        try:
+            platform, _, _, file = [x.strip() for x in line.split("|")]
+        except:
+            continue
+
+        if BIN_TRACK_RE.match(file):
+            continue
+
+        stem, _ = os.path.splitext(file)
+        roms_by_platform.setdefault(platform, []).append(stem)
+
+        xml_title = lb_title_map.get(platform, {}).get(stem)
+        if xml_title:
+            titles_by_platform.setdefault(platform, []).append(xml_title)
+
+    planned_jobs = []
+    total = 0
+
+    for platform, rom_stems in roms_by_platform.items():
+        platform_printed = False
+        titles = titles_by_platform.get(platform, [])
+
+        for root, strict in IMAGE_SOURCES:
+            if not root:
+                continue
+
+            if strict:
+                if root == RETROARCH_IMG_DIR:
+                    subdirs = [
+                        (RETROARCH_COVER_SUBDIR, False),
+                        (RETROARCH_SCREEN_SUBDIR, False),
+                    ]
+                else:
+                    subdirs = [
+                        (LAUNCHBOX_COVER_SUBDIR, True),
+                        (LAUNCHBOX_SCREEN_SUBDIR, True),
+                    ]
+            else:
+                subdirs = [(None, False)]
+
+            for subdir, is_launchbox in subdirs:
+                img_dir = (
+                    os.path.join(root, platform, subdir)
+                    if subdir else root
+                )
+                if not os.path.isdir(img_dir):
+                    continue
+
+                files = [
+                    f for f in os.listdir(img_dir)
+                    if os.path.splitext(f)[1].lower() in VALID_IMAGE_EXTS
+                ]
+
+                file_bases = {os.path.splitext(f)[0]: f for f in files}
+                pool = titles if is_launchbox else rom_stems
+
+                # Reserve exact matches so we don't accidentally reassign them
+                reserved_bases = set()
+                for item in pool:
+                    if is_launchbox:
+                        exact_names = {
+                            item,
+                            item.replace("'", "_"),
+                            item.replace(":", "_"),
+                        }
+                        for base in file_bases:
+                            if dash2_re.sub("", base) in exact_names:
+                                reserved_bases.add(base)
+                    else:
+                        exact_names = {
+                            item,
+                            item.replace("&", "_"),
+                        }
+                        for base in file_bases:
+                            if base in exact_names:
+                                reserved_bases.add(base)
+
+                for item in pool:
+                    if is_launchbox:
+                        exact_names = {
+                            item,
+                            item.replace("'", "_"),
+                            item.replace(":", "_"),
+                        }
+                        if any(dash2_re.sub("", b) in exact_names for b in reserved_bases):
+                            continue
+                    else:
+                        exact_names = {
+                            item,
+                            item.replace("&", "_"),
+                        }
+                        if any(b in exact_names for b in reserved_bases):
+                            continue
+
+                    item_norm = normalize_text(item)
+                    matches = []
+                    for f in files:
+                        base = os.path.splitext(f)[0]
+                        if base in reserved_bases:
+                            continue
+
+                        # allow -XX stripped filename to match
+                        if (
+                            normalize_text(base) == item_norm or
+                            normalize_text(dash2_re.sub("", base)) == item_norm
+                        ):
+                            matches.append(f)
+
+                    if len(matches) != 1:
+                        continue
+
+                    src = matches[0]
+                    ext = os.path.splitext(src)[1]
+
+                    # Determine destination naming correctly:
+                    # - Titles are only used to FIND the source image
+                    # - LaunchBox destination names for screenshots/covers must be ROM-stem based
+                    if is_launchbox:
+                        rom_stem = None
+                        # primary: lookup via normalized title in title_to_stem keyed by LAUNCHBOX_PLATFORMS key
+                        rom_stem = title_to_stem.get(platform, {}).get(item_norm)
+                        if not rom_stem:
+                            rom_stem = title_to_stem.get(platform, {}).get(item)
+                        if not rom_stem:
+                            # fallback: scan lb_title_map entries for platform
+                            lbmap = lb_title_map.get(platform, {})
+                            for s, t in lbmap.items():
+                                if normalize_text(t) == item_norm and s in rom_stems:
+                                    rom_stem = s
+                                    break
+                        if not rom_stem:
+                            # cannot determine rom stem → skip this item
+                            continue
+
+                        dst = make_launchbox_image_name(platform, rom_stem, ext)
+                    else:
+                        # non-launchbox targets use rom stem when pool is rom_stems,
+                        # otherwise fall back to a sanitized title-based filename
+                        if item in rom_stems:
+                            base_name = item
+                        else:
+                            base_name = item.replace("&", "_")
+                        dst = base_name + ext
+
+                    if not dst:
+                        continue
+                    if src == dst:
+                        continue
+
+                    planned_jobs.append(
+                        (os.path.join(img_dir, src), os.path.join(img_dir, dst))
+                    )
+
+                    if not platform_printed:
+                        print(f"[PLATFORM] {platform}")
+                        platform_printed = True
+
+                    print(f"   [PATH] {img_dir}")
+                    print(f"      [RENAME] {src} -> {dst}")
+                    total += 1
+
+    if total == 0:
+        print("Planned renames: 0")
+        return
+
+    print(f"\nPlanned renames: {total}")
+    resp = input("Apply these changes? [Y/N]: ").strip().lower()
+    if resp not in ("y", "yes"):
+        print("Cancelled.")
+        return
+
+    for src, dst in planned_jobs:
+        if not os.path.exists(dst):
+            os.rename(src, dst)
+
+    print(f"Applied {len(planned_jobs)} renames.")
+
+# ---------- Covers ----------
+
+def cmd_sync_covers():
+    print(f"\n{Fore.LIGHTRED_EX}[WARNING]{Style.RESET_ALL} This will overwrite all images in the target folder.\n")
+
+    options = [
+        ("LaunchBox", LAUNCHBOX_IMG_DIR),
+        ("RetroArch", RETROARCH_IMG_DIR),
+        ("Dolphin", DOLPHIN_IMG_DIR),
+        ("PCSX2", PCSX2_IMG_DIR),
+        ("Exit", None),
+    ]
+
+    def incompatible(src, tgt):
+        if src == tgt:
+            return True
+        if src == "PCSX2" and tgt == "Dolphin":
+            return True
+        if src == "Dolphin" and tgt == "PCSX2":
+            return True
+        return False
+
+    def system_platforms(src):
+        if src == "PCSX2":
+            return SYSTEMS["PS2"]["platforms"]
+        if src == "Dolphin":
+            return SYSTEMS["GC"]["platforms"] + SYSTEMS["WII"]["platforms"]
+        return []
+
+    def path_status(path):
+        return status_ok() if path and os.path.isdir(path) else status_xx()
+
+    def dim_status_plain(path):
+        return "[ OK ]" if path and os.path.isdir(path) else "[ XX ]"
+
+    # =========================================================
+    # SOURCE SELECTION
+    # =========================================================
+    print("Select source of cover files")
+
+    for i, (name, root) in enumerate(options, 1):
+        print(f"{i}) {name:<12}")
+        if root:
+            print(f"     {path_status(root)} {root}")
+
+    while True:
+        try:
+            c = int(input("\nSelect option: ").strip())
+            if 1 <= c <= len(options):
+                src_name, src_root = options[c - 1]
+                if not src_root:
+                    return
+                break
+        except:
+            pass
+        print("Invalid selection.")
+
+    # =========================================================
+    # TARGET SELECTION
+    # =========================================================
+    print("\nSelect target folder")
+
+    plats = system_platforms(src_name)
+
+    for i, (name, root) in enumerate(options, 1):
+        disabled = incompatible(src_name, name)
+        prefix = Fore.LIGHTBLACK_EX if disabled else ""
+        suffix = Style.RESET_ALL if disabled else ""
+
+        print(prefix + f"{i}) {name:<12}")
+
+        if not root:
+            if disabled:
+                print(suffix, end="")
+            continue
+
+        # Expanded platform targets (Dolphin / PCSX2 → LB / RA)
+        if src_name in ("PCSX2", "Dolphin") and name in ("LaunchBox", "RetroArch"):
+            subdir = (
+                RETROARCH_COVER_SUBDIR
+                if name == "RetroArch"
+                else LAUNCHBOX_COVER_SUBDIR
+            )
+
+            for p in plats:
+                full = os.path.join(root, p, subdir)
+                if disabled:
+                    print(prefix + "     " + dim_status_plain(full) + " " + full)
+                else:
+                    print("     " + path_status(full) + " " + full)
+
+        # Normal single-path target
+        else:
+            if disabled:
+                print(prefix + "     " + dim_status_plain(root) + " " + root)
+            else:
+                print("     " + path_status(root) + " " + root)
+
+        if disabled:
+            print(suffix, end="")
+
+    while True:
+        try:
+            c = int(input("\nSelect option: ").strip())
+            if 1 <= c <= len(options):
+                tgt_name, tgt_root = options[c - 1]
+                if incompatible(src_name, tgt_name):
+                    print("Invalid target for selected source.")
+                    continue
+                if not tgt_root:
+                    return
+                break
+        except:
+            pass
+        print("Invalid selection.")
+
+    sync_covers(src_name, src_root, tgt_name, tgt_root)
+
+
+# ---------- Gameplay ----------
+
+def cmd_sync_screenshots():
+    global SYNC_BOTH_ACTIVE
+
+    print(f"\n{Fore.LIGHTRED_EX}[WARNING]{Style.RESET_ALL} This will overwrite all images in the target folder.\n")
+
+    # =========================================================
+    # SOURCE SELECTION
+    # =========================================================
+    sources = [
+        ("LaunchBox", "LB"),
+        ("RetroArch", "RA"),
+        ("All screenshots", "ALL"),
+        ("RetroArch screenshots", "RA_RAW"),
+        ("Dolphin screenshots", "DOLPHIN"),
+        ("PCSX2 screenshots", "PCSX2"),
+        ("Exit", None),
+    ]
+
+    print("Select source of gameplay images:")
+    for i, (name, key) in enumerate(sources, 1):
+        print(f"{i}) {name}")
+        if key == "LB":
+            print(f"     {status_ok()} {LAUNCHBOX_IMG_DIR}\\<platform>\\{LAUNCHBOX_SCREEN_SUBDIR}")
+        elif key == "RA":
+            print(f"     {status_ok()} {RETROARCH_IMG_DIR}\\<platform>\\{RETROARCH_SCREEN_SUBDIR}")
+        elif key == "ALL":
+            print(f"     {status_ok()} {RETROARCH_SCREEN_DIR}\\<platform>")
+            print(f"     {status_ok()} {DOLPHIN_SCREEN_DIR}")
+            print(f"     {status_ok()} {PCSX2_SCREEN_DIR}")
+        elif key == "RA_RAW":
+            print(f"     {status_ok()} {RETROARCH_SCREEN_DIR}\\<platform>")
+        elif key == "DOLPHIN":
+            print(f"     {status_ok()} {DOLPHIN_SCREEN_DIR}")
+        elif key == "PCSX2":
+            print(f"     {status_ok()} {PCSX2_SCREEN_DIR}")
+
+    while True:
+        raw = input("\nSelect option: ").strip()
+        try:
+            c = int(raw)
+        except:
+            print("Invalid selection.")
+            continue
+
+        if not (1 <= c <= len(sources)):
+            print("Invalid selection.")
+            continue
+
+        _, src_key = sources[c - 1]
+        if src_key is None:
+            return
+        break
+
+    # =========================================================
+    # TARGET SELECTION
+    # =========================================================
+    print("\nSelect target folder")
+
+    if src_key == "LB":
+        allowed = {2, 7}
+    elif src_key == "RA":
+        allowed = {1, 7}
+    else:
+        allowed = {1, 2, 3, 7}
+
+    def target_disabled(code):
+        return code not in allowed
+
+    def print_target(code, name):
+        disabled = target_disabled(code)
+
+        if disabled:
+            prefix = Fore.LIGHTBLACK_EX
+            suffix = Style.RESET_ALL
+            status = "[ -- ]"
+        else:
+            prefix = ""
+            suffix = ""
+            status = status_ok()
+
+        print(prefix + f"{code}) {name}")
+
+        # -----------------------------------------------------
+        # Only show concrete platform paths for Dolphin / PCSX2
+        # -----------------------------------------------------
+        platforms = None
+        show_generic = True
+
+        if src_key == "PCSX2":
+            platforms = SYSTEMS["PS2"]["platforms"]
+            show_generic = False
+
+        elif src_key == "DOLPHIN":
+            platforms = SYSTEMS["GC"]["platforms"] + SYSTEMS["WII"]["platforms"]
+            show_generic = False
+
+        if name in ("LaunchBox", "Both"):
+            if platforms and not show_generic:
+                for p in platforms:
+                    path = os.path.join(
+                        LAUNCHBOX_IMG_DIR, p, LAUNCHBOX_SCREEN_SUBDIR
+                    )
+                    print(prefix + f"     {status} {path}")
+            else:
+                print(prefix + f"     {status} {LAUNCHBOX_IMG_DIR}\\<platform>\\{LAUNCHBOX_SCREEN_SUBDIR}")
+
+        if name in ("RetroArch", "Both"):
+            if platforms and not show_generic:
+                for p in platforms:
+                    path = os.path.join(
+                        RETROARCH_IMG_DIR, p, RETROARCH_SCREEN_SUBDIR
+                    )
+                    print(prefix + f"     {status} {path}")
+            else:
+                print(prefix + f"     {status} {RETROARCH_IMG_DIR}\\<platform>\\{RETROARCH_SCREEN_SUBDIR}")
+
+        if disabled:
+            print(suffix, end="")
+
+    print_target(1, "LaunchBox")
+    print_target(2, "RetroArch")
+    print_target(3, "Both")
+    print("7) Exit")
+
+    while True:
+        raw = input("\nSelect option: ").strip()
+        try:
+            c = int(raw)
+        except:
+            print("Invalid selection.")
+            continue
+
+        if c == 7:
+            return
+
+        if c not in (1, 2, 3):
+            print("Invalid selection.")
+            continue
+
+        if target_disabled(c):
+            print("Invalid target for selected source.")
+            continue
+
+        if c == 1:
+            sync_screenshots(1, src_key)
+        elif c == 2:
+            sync_screenshots(2, src_key)
+        elif c == 3:
+            SYNC_BOTH_ACTIVE = True
+            sync_screenshots(1, src_key)
+            print()
+            sync_screenshots(2, src_key)
+            SYNC_BOTH_ACTIVE = False
+
+        return
+
 # ---------- Modify ----------
 
 def apply_rename_jobs(rename_jobs):
     for rom_dir, old_file, new_file in rename_jobs:
         # ----------------------------------
-        # Platform must be resolved FIRST
+        # Resolve platform robustly
         # ----------------------------------
-        platform = os.path.basename(rom_dir)
-        system = PLATFORM_TO_SYSTEM.get(platform)
+        platform = None
+        cur = rom_dir
 
+        # Walk upwards until we find a known platform folder
+        while cur and cur != os.path.dirname(cur):
+            name = os.path.basename(cur)
+            if name in PLATFORM_TO_SYSTEM:
+                platform = name
+                break
+            cur = os.path.dirname(cur)
+
+        system = PLATFORM_TO_SYSTEM.get(platform) if platform else None
+
+        # ----------------------------------
+        # ROM files
+        # ----------------------------------
         plan = build_rom_rename_plan(rom_dir, old_file, new_file)
         apply_renames(plan)
-        rename_save_files(old_file, new_file)
-        rename_retroarch_logs(old_file, new_file)
-        rename_platform_images(platform, old_file, new_file)
+
+        # ----------------------------------
+        # RetroArch saves & logs (scoped helpers)
+        # ----------------------------------
+        rename_save_files(old_file, new_file, platform, system)
+        rename_retroarch_logs(old_file, new_file, platform, system)
+
+        # ----------------------------------
+        # Platform images (thumbnails / screenshots)
+        # ----------------------------------
+        if platform:
+            rename_platform_images(platform, old_file, new_file)
 
         # ----------------------------------
         # CUE → BIN handling
@@ -2487,90 +3775,62 @@ def apply_rename_jobs(rename_jobs):
             )
 
         # ----------------------------------
-        # RetroArch playlists & LaunchBox XML
-        # (FULL filename content replacement, not file rename)
+        # RetroArch playlists (.lpl)
         # ----------------------------------
-        try:
-            # Replace inside all .lpl files (playlists contain full filenames)
-            if os.path.isdir(RETROARCH_PLAYLIST_DIR):
-                for dirpath, _, files in os.walk(RETROARCH_PLAYLIST_DIR):
-                    for fname in files:
-                        if not fname.lower().endswith(".lpl"):
-                            continue
+        if os.path.isdir(RETROARCH_PLAYLIST_DIR):
+            for dirpath, _, files in os.walk(RETROARCH_PLAYLIST_DIR):
+                for fname in files:
+                    if fname.lower().endswith(".lpl"):
                         path = os.path.join(dirpath, fname)
-                        try:
-                            replace_stem_in_file(path, old_file, new_file)
-                        except Exception:
-                            # best-effort: skip files that fail
-                            pass
+                        replace_stem_in_file(path, old_file, new_file)
 
-            # Replace inside all .xml files in the LaunchBox data directory
-            if os.path.isdir(LAUNCHBOX_DATA_DIR):
-                for dirpath, _, files in os.walk(LAUNCHBOX_DATA_DIR):
-                    for fname in files:
-                        if not fname.lower().endswith(".xml"):
+        # ----------------------------------
+        # LaunchBox XML (ApplicationPath ONLY)
+        # ----------------------------------
+        if os.path.isdir(LAUNCHBOX_DATA_DIR):
+            for dirpath, _, files in os.walk(LAUNCHBOX_DATA_DIR):
+                for fname in files:
+                    if not fname.lower().endswith(".xml"):
+                        continue
+
+                    path = os.path.join(dirpath, fname)
+                    try:
+                        tree = ET.parse(path)
+                        root = tree.getroot()
+                    except:
+                        continue
+
+                    changed = False
+
+                    for g in root.findall("Game"):
+                        app = g.findtext("ApplicationPath", "")
+                        if not app:
                             continue
-                        path = os.path.join(dirpath, fname)
-                        try:
-                            replace_stem_in_file(path, old_file, new_file)
-                        except Exception:
-                            pass
 
-        except Exception:
-            # guard: do not break the whole rename operation
-            pass
+                        if os.path.basename(app) != old_file:
+                            continue
+
+                        g.find("ApplicationPath").text = os.path.join(
+                            os.path.dirname(app),
+                            new_file
+                        )
+                        changed = True
+
+                    if changed:
+                        indent_xml(root)
+                        tree.write(path, encoding="utf-8", xml_declaration=True)
 
         # ----------------------------------
-        # Everything below uses STEMS (existing behavior)
+        # RetroArch core configs (stem-based)
         # ----------------------------------
-        oldStem, _ = split_stem(old_file)
-        newStem, _ = split_stem(new_file)
+        if system:
+            oldStem, _ = split_stem(old_file)
+            newStem, _ = split_stem(new_file)
 
-        replace_stem_in_tree(
-            os.path.join(RETROARCH_DIR, "saves"),
-            oldStem,
-            newStem
-        )
-
-        if not system:
-            continue
-
-        cores = SYSTEM_TO_CORES.get(system)
-        if not cores:
-            continue
-
-        saves_root = os.path.join(RETROARCH_DIR, "saves")
-        logs_root = os.path.join(RETROARCH_PLAYLIST_DIR, "logs")
-
-        plat_save = os.path.join(saves_root, platform)
-        plat_log = os.path.join(logs_root, platform)
-
-        if os.path.isdir(plat_save):
-            replace_stem_in_tree(plat_save, oldStem, newStem)
-
-        if os.path.isdir(plat_log):
-            replace_stem_in_tree(plat_log, oldStem, newStem)
-
-        for core in cores:
-            core_save = os.path.join(saves_root, core)
-            core_log = os.path.join(logs_root, core)
-
-            if os.path.isdir(core_save):
-                replace_stem_in_tree(core_save, oldStem, newStem)
-
-            if os.path.isdir(core_log):
-                replace_stem_in_tree(core_log, oldStem, newStem)
-
-        for core in cores:
-            core_cfg_dir = os.path.join(RETROARCH_CFG_DIR, core)
-            if not os.path.isdir(core_cfg_dir):
-                continue
-
-            replace_stem_in_tree(
-                core_cfg_dir,
-                oldStem,
-                newStem
-            )
+            for core in SYSTEM_TO_CORES.get(system, []):
+                core_cfg_dir = os.path.join(RETROARCH_CFG_DIR, core)
+                if os.path.isdir(core_cfg_dir):
+                    replace_stem_in_tree(core_cfg_dir, oldStem, newStem)
 
 def is_disc_tag_removed(old_file, new_file):
     """
@@ -2828,25 +4088,34 @@ def cmd_backup():
 COMMANDS = {
     "check paths": cmd_check_paths,
     "rescan": cmd_rescan,
-    "sync": cmd_sync,
-    "change labels": cmd_change_labels,
+    "backup": cmd_backup,
     "modify": cmd_modify,
     "history": show_history,
     "revert": cmd_revert,
-    "backup": cmd_backup,
+    "link pictures": cmd_link_pictures,
+    "sync covers": cmd_sync_covers,
+    "sync screens": cmd_sync_screenshots,
+    "sync playtime": cmd_sync,
+    "change labels": cmd_change_labels,
     "help": lambda: print("""
 Commands:
 
-  help            - Show this screen  
-  check paths     - Verify all emulator and platform paths
-  rescan          - Refresh game library
-  sync            - Sync playtime from emulators into LaunchBox
-  change labels   - backup and modify Retroarch labels
-  modify          - Batch edit playtime | last played | filename
-  history         - Show modification log
-  revert <n>      - Undo or redo a modification (check history)
-  backup          - Snapshot all emulator + LaunchBox data
-  exit            - Quit
+  help             - Show this screen  
+  check paths      - Verify all emulator and platform paths
+  rescan           - Refresh game library
+  backup           - Snapshot all emulator + LaunchBox data
+
+  modify           - Batch edit playtime | last played | filename
+  history          - Show modification log
+  revert <n>       - Undo or redo a modification (check history)
+
+  link pictures    - Rename and link existing images to ROMs
+  sync covers      - Sync game covers between platforms (link pictures first)
+  sync screens     - Sync gameplay pictures between Retroarch/Launchbox or use own screenshots
+  sync playtime    - Sync playtime from emulators into LaunchBox
+  change labels    - Backup and modify Retroarch labels
+
+  exit             - Quit
 """)
 }
 

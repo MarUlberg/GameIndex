@@ -10,52 +10,53 @@ PRINT_ALL = True
 # If True, show playtime in seconds rather then h m
 PLAYTIME_SEC = False 
 
-# ---------------- LaunchBox ----------------
-
-LAUNCHBOX_DIR = "C:\\LaunchBox"
-LAUNCHBOX_IMG_DIR = os.path.join(LAUNCHBOX_DIR, "Images")
-LAUNCHBOX_DATA_DIR = os.path.join(LAUNCHBOX_DIR, "Data", "Platforms")
-
 # ---------------- LaunchBox Platform XML ----------------
 LAUNCHBOX_PLATFORMS = {
     # ---------- Windows ----------
-    "Windows":                        				"Windows.xml",
+    "Windows":                                       "Windows.xml",
 	
     # ---------- Arcade ----------
-    "FBNeo - Arcade Games":                         "Arcade.xml",
+    "FBNeo - Arcade Games":                          "Arcade.xml",
 
     # ---------- Handheld ----------
-    "Handheld Electronic Game":                     "Game & Watch.xml",
+    "Handheld Electronic Game":                      "Game & Watch.xml",
 
-    "Nintendo - Game Boy":                          "Nintendo Game Boy.xml",
-    "Nintendo - Game Boy Color":                    "Nintendo Game Boy Color.xml",
-    "Nintendo - Game Boy Advance":                  "Nintendo Game Boy Advance.xml",
-    "Nintendo - Nintendo DS":                       "Nintendo DS.xml",
-    "Nintendo - Nintendo 3DS":                      "Nintendo 3DS.xml",
+    "Nintendo - Game Boy":                           "Nintendo Game Boy.xml",
+    "Nintendo - Game Boy Color":                     "Nintendo Game Boy Color.xml",
+    "Nintendo - Game Boy Advance":                   "Nintendo Game Boy Advance.xml",
+    "Nintendo - Nintendo DS":                        "Nintendo DS.xml",
+    "Nintendo - Nintendo 3DS":                       "Nintendo 3DS.xml",
 
     # ---------- Nintendo Consoles ----------
-    "Nintendo - Nintendo Entertainment System":     "Nintendo Entertainment System.xml",
+    "Nintendo - Nintendo Entertainment System":      "Nintendo Entertainment System.xml",
     "Nintendo - Super Nintendo Entertainment System":"Super Nintendo.xml",
-    "Nintendo - Nintendo Virtual Boy":              "Nintendo Virtual Boy.xml",
-    "Nintendo - Nintendo 64":                       "Nintendo 64.xml",
-    "Nintendo - GameCube":                          "Nintendo GameCube.xml",
-    "Nintendo - Wii":                               "Nintendo Wii.xml",
+    "Nintendo - Virtual Boy":                        "Nintendo Virtual Boy.xml",
+    "Nintendo - Nintendo 64":                        "Nintendo 64.xml",
+    "Nintendo - GameCube":                           "Nintendo GameCube.xml",
+    "Nintendo - Wii":                                "Nintendo Wii.xml",
 
     # ---------- Sega ----------
-    "Sega - Master System - Mark III":              "Sega Master System.xml",
-    "Sega - Game Gear":                             "Sega Game Gear.xml",
-    "Sega - Mega Drive - Genesis":                  "Sega Mega Drive.xml",
-    "Sega - Mega-CD - Sega CD":                     "Sega CD.xml",
-    "Sega - 32X":                                   "Sega 32X.xml",
-    "Sega - Saturn":                                "Sega Saturn.xml",
-    "Sega - Dreamcast":                             "Sega Dreamcast.xml",
+    "Sega - Master System - Mark III":               "Sega Master System.xml",
+    "Sega - Game Gear":                              "Sega Game Gear.xml",
+    "Sega - Mega Drive - Genesis":                   "Sega Mega Drive.xml",
+    "Sega - Mega-CD - Sega CD":                      "Sega Mega Drive.xml",
+    "Sega - 32X":                                    "Sega Mega Drive.xml",
+    "Sega - Saturn":                                 "Sega Saturn.xml",
+    "Sega - Dreamcast":                              "Sega Dreamcast.xml",
 
     # ---------- Sony ----------
-    "Sony - PlayStation":                           "Sony Playstation.xml",
-    "Sony - PlayStation 2":                         "Sony Playstation 2.xml",
-    "Sony - PlayStation Portable":                  "Sony PlayStation Portable.xml",
+    "Sony - PlayStation":                            "Sony Playstation.xml",
+    "Sony - PlayStation 2":                          "Sony Playstation 2.xml",
+    "Sony - PlayStation Portable":                   "Sony PlayStation Portable.xml",
 }
 
+# ---------------- LaunchBox ----------------
+
+LAUNCHBOX_DIR = "H:\\LaunchBox"
+LAUNCHBOX_DATA_DIR = os.path.join(LAUNCHBOX_DIR, "Data", "Platforms")
+LAUNCHBOX_IMG_DIR = os.path.join(LAUNCHBOX_DIR, "Images")
+LAUNCHBOX_COVER_SUBDIR = "Box - Front"
+LAUNCHBOX_SCREEN_SUBDIR = "Screenshot - Gameplay"
 
 # ---------------- RetroArch ----------------
 
@@ -64,6 +65,9 @@ RETROARCH_CFG_DIR = os.path.join(RETROARCH_DIR, "config")
 RETROARCH_PLAYLIST_DIR = os.path.join(RETROARCH_DIR, "playlists")
 RETROARCH_LOG_DIR = os.path.join(RETROARCH_PLAYLIST_DIR, "logs")
 RETROARCH_IMG_DIR = os.path.join(RETROARCH_DIR, "thumbnails")
+RETROARCH_SCREEN_DIR = os.path.join(RETROARCH_DIR, "screenshots")
+RETROARCH_COVER_SUBDIR = "Named_Boxarts"
+RETROARCH_SCREEN_SUBDIR = "Named_Snaps"
 
 GAMES_DIR = os.path.join(RETROARCH_DIR, "games")
 
@@ -78,7 +82,7 @@ N3DS_DIR = os.path.join(GAMES_DIR, "Nintendo - Nintendo 3DS")
 
 NES_DIR  = os.path.join(GAMES_DIR, "Nintendo - Nintendo Entertainment System")
 SNES_DIR = os.path.join(GAMES_DIR, "Nintendo - Super Nintendo Entertainment System")
-NVB_DIR  = os.path.join(GAMES_DIR, "Nintendo - Nintendo Virtual Boy")
+NVB_DIR  = os.path.join(GAMES_DIR, "Nintendo - Virtual Boy")
 N64_DIR  = os.path.join(GAMES_DIR, "Nintendo - Nintendo 64")
 NGC_DIR  = os.path.join(GAMES_DIR, "Nintendo - GameCube")
 WII_DIR  = os.path.join(GAMES_DIR, "Nintendo - Wii")
@@ -100,18 +104,31 @@ PSP_DIR  = os.path.join(GAMES_DIR, "Sony - PlayStation Portable")
 DOLPHIN_DIR = "C:\\Program Files\\Dolphin Emulator"
 DOLPHIN_TOOL = os.path.join(DOLPHIN_DIR, "DolphinTool.exe")
 DOLPHIN_PLAYTIME = os.path.join(DOLPHIN_DIR, "User", "Config", "TimePlayed.ini")
+DOLPHIN_IMG_DIR = os.path.join(DOLPHIN_DIR, "User", "Cache", "GameCovers")
+DOLPHIN_SCREEN_DIR = os.path.join(DOLPHIN_DIR, "User", "ScreenShots")
 
 # ---------------- PCSX2 ----------------
 
 PCSX2_DIR = "C:\\Program Files\\PCSX2"
 PCSX2_PLAYTIME = os.path.join(PCSX2_DIR, "inis", "playtime.dat")
+PCSX2_IMG_DIR = os.path.join(PCSX2_DIR, "covers")
+PCSX2_SCREEN_DIR = os.path.join(PCSX2_DIR, "snaps")
 
 # ---------------- Minecraft ----------------
 
-MINECRF_DIR = r"%APPDATA%\.minecraft"
+MINECRF_DIR = r"%APPDATA%\\.minecraft"
 
-# ---------------- World of Warcraft ----------------
+# ------------- World of Warcraft ------------
 
-WOWRE_DIR = r"G:\World of Warcraft\_retail_\WTF\Account\<account>\SavedVariables"
-WOWERA_DIR = r"G:\World of Warcraft\_classic_era_\WTF\Account\<account>\SavedVariables"
-WOWCLA_DIR = r"G:\World of Warcraft\_classic_\WTF\Account\<account>\SavedVariables"
+WOW_DIR     = r"G:\\World of Warcraft"
+WOWRE_DIR   = os.path.join(WOW_DIR, "_retail_", "WTF", "Account", "RAMARSETH", "SavedVariables")
+WOWERA_DIR  = os.path.join(WOW_DIR, "_classic_era_", "WTF", "Account", "RAMARSETH", "SavedVariables")
+WOWCLA_DIR  = os.path.join(WOW_DIR, "_classic_", "WTF", "Account", "RAMARSETH", "SavedVariables")
+
+# ----------- Aditional locations ------------
+
+# 3rd optional images location
+ADITIONAL_IMG_DIR = "H:\\ImagesRAW"
+
+# 2nd playlist location for mobile playlists
+ADITIONAL_PLAYLIST_DIR = os.path.join(RETROARCH_DIR, "playlists", "mobile")

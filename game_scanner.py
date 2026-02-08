@@ -57,6 +57,289 @@ RETROARCH_DIR = _setup["RETROARCH_DIR"]
 GAMES_DIR     = _setup["GAMES_DIR"]
 DOLPHIN_TOOL = _setup["DOLPHIN_TOOL"]
 
+
+# ============================================================
+# ========================= SYSTEMS ==========================
+# ============================================================
+
+SYSTEMS = {
+
+#    "SYSTEM": {
+#        "display": "Manufacturer - System Name",
+#        "root": _setup["SYS_DIR"],
+#        "exts": .iso,
+#        "db_sections": ["Manufacturer - System Name"],
+#        "id_pattern": Regular expression describing a valid game ID, 
+#        "gameid": (system_arg, supports_id, supports_title, supports_crc),
+#        "scanner": "scan_system",
+#    },
+
+    "ARCADE": {
+        "display": "FBNeo - Arcade Games",
+        "root": _setup["ARC_DIR"],
+        "exts": (".zip",),
+        "db_sections": ["FBNeo - Arcade Games"],
+        "id_pattern": r"[a-z0-9_]+",
+        "gameid": (None, False, False, False),
+        "scanner": "None",
+    },
+
+    "GW": {
+        "display": "Handheld Electronic Game",
+        "root": _setup["NGW_DIR"],
+        "exts": (".zip",),
+        "db_sections": ["Handheld Electronic Game"],
+        "id_pattern": r"[A-Z]{2}-[0-9]{2,3}[A-Z]?",
+        "gameid": (None, False, False, False),
+        "scanner": "scan_gamewatch",
+    },
+
+    "GB": {
+        "display": "Nintendo - Game Boy",
+        "root": _setup["GB_DIR"],
+        "exts": (".gb",".gbc"),
+        "db_sections": ["Nintendo - Game Boy", "Nintendo - Game Boy Color"],
+        "id_pattern": r"(?:CGB|DMG)-[A-Z0-9]{4}",
+        "gameid": ("GBC", True, True, True),
+        "scanner": "scan_gb",
+    },
+
+    "GBC": {
+        "display": "Nintendo - Game Boy Color",
+        "root": _setup["GBC_DIR"],
+        "exts": (".gb",".gbc"),
+        "db_sections": ["Nintendo - Game Boy", "Nintendo - Game Boy Color"],
+        "id_pattern": r"(?:CGB|DMG)-[A-Z0-9]{4}",
+        "gameid": ("GBC", True, True, True),
+        "scanner": "scan_gb",
+    },
+
+    "GBA": {
+        "display": "Nintendo - Game Boy Advance",
+        "root": _setup["GBA_DIR"],
+        "exts": (".gba",),
+        "db_sections": ["Nintendo - Game Boy Advance"],
+        "id_pattern": r"AGB-[A-Z0-9]{4}",
+        "gameid": ("GBA", True, True, True),
+        "scanner": "scan_gba",
+    },
+
+    "NDS": {
+        "display": "Nintendo - Nintendo DS",
+        "root": _setup["NDS_DIR"],
+        "exts": (".nds",),
+        "db_sections": ["Nintendo - Nintendo DS"],
+        "id_pattern": r"[A-Z]{4}[A-Z0-9]{4}",
+        "gameid": (None, False, False, False),
+        "scanner": "scan_ds",
+    },
+
+    "3DS": {
+        "display": "Nintendo - Nintendo 3DS",
+        "root": _setup["N3DS_DIR"],
+        "exts": (".3ds",),
+        "db_sections": ["Nintendo - Nintendo 3DS"],
+        "id_pattern": r"(?:CTR|KTR|BBB)-[A-Z0-9]{4}",
+        "gameid": (None, False, False, False),
+        "scanner": "scan_3ds",
+    },
+
+    "NES": {
+        "display": "Nintendo - Nintendo Entertainment System",
+        "root": _setup["NES_DIR"],
+        "exts": (".nes",),
+        "db_sections": ["Nintendo - Nintendo Entertainment System"],
+        "id_pattern": r"$^",
+        "gameid": ("NES", True, True, True),
+        "scanner": "None",
+    },
+
+    "SNES": {
+        "display": "Nintendo - Super Nintendo Entertainment System",
+        "root": _setup["SNES_DIR"],
+        "exts": (".sfc", ".smc"),
+        "db_sections": ["Nintendo - Super Nintendo Entertainment System"],
+        "id_pattern": r"(?:SHVC|SNSP|SNS|SFT)[-_]?[A-Z0-9]{2,6}",
+        "gameid": ("SNES", True, True, True),
+        "scanner": "None",
+    },
+
+    "VB": {
+        "display": "Nintendo - Virtual Boy",
+        "root": _setup["NVB_DIR"],
+        "exts": (".vb", ".vboy", ".bin"),
+        "db_sections": ["Nintendo - Virtual Boy"],
+        "id_pattern": r"[A-Z0-9]{3,8}",
+        "gameid": (None, False, False, False),
+        "scanner": "None",
+    },
+
+    "N64": {
+        "display": "Nintendo - Nintendo 64",
+        "root": _setup["N64_DIR"],
+        "exts": (".z64", ".n64", ".v64"),
+        "db_sections": ["Nintendo - Nintendo 64"],
+        "id_pattern": r"NUS-[A-Z0-9]{4}",
+        "gameid": ("N64", True, True, True),
+        "scanner": "scan_n64",
+    },
+
+    "GC": {
+        "display": "Nintendo - GameCube",
+        "root": _setup["NGC_DIR"],
+        "exts": (".iso", ".gcm", ".rvz", ".wbfs"),
+        "db_sections": ["Nintendo - GameCube and Nintendo - Wii"],
+        "id_pattern": r"(?=[A-Z0-9]{6})(?=.*\d)[A-Z0-9]{6}",
+        "gameid": ("GC", True, True, True),
+        "scanner": "scan_gamecube",
+    },
+
+    "WII": {
+        "display": "Nintendo - Wii",
+        "root": _setup["WII_DIR"],
+        "exts": (".iso", ".wbfs", ".rvz"),
+        "db_sections": ["Nintendo - GameCube and Nintendo - Wii"],
+        "id_pattern": r"(?=[A-Z0-9]{6})(?=.*\d)[A-Z0-9]{6}",
+        "gameid": ("GC", True, True, True),
+        "scanner": "scan_wii",
+    },
+
+    "MasterSys": {
+        "display": "Sega - Master System - Mark III",
+        "root": _setup["SMS_DIR"],
+        "exts": (".sms", ".bin"),
+        "db_sections": ["Sega - Master System - Mark III"],
+        "id_pattern": r"$^",
+        "gameid": (None, False, False, False),
+        "scanner": "None",
+    },
+        
+    "GameGear": {
+        "display": "Sega - Game Gear",
+        "root": _setup["SGG_DIR"],
+        "exts": (".gg",),
+        "db_sections": None,
+        "id_pattern": r"$^",
+        "gameid": (None, False, False, False),
+        "scanner": "None",
+    },
+
+    "Genesis": {
+        "display": "Sega - Mega Drive - Genesis",
+        "root": _setup["SMD_DIR"],
+        "exts": (".md", ".bin", ".smd", ".gen"),
+        "db_sections": ["Sega - Mega Drive - Genesis"],
+        "id_pattern": r"(?:T-[0-9]{4,7}[A-Z]?|MK-[0-9]{5,8}|HDR-[0-9]{4,6}|\b(?!19(?:8[0-9]|9[0-9]))[0-9]{4}\b)",
+        "gameid": ("Genesis", True, True, True),
+        "scanner": "scan_megadrive",
+    },
+    
+    "SegaCD": {
+        "display": "Sega - Mega-CD - Sega CD",
+        "root": _setup["SCD_DIR"],
+        "exts": (".cue", ".iso", ".chd"),
+        "db_sections": ["Sega - Mega-CD - Sega CD"],
+        "id_pattern": r"(?:T-[0-9]{4,7}[A-Z]?|MK-[0-9]{5,8}|HDR-[0-9]{4,6})",
+        "gameid": ("SegaCD", True, True, True),
+        "scanner": "scan_segacd",
+    },
+
+    "32X": {
+        "display": "Sega - 32X",
+        "root": _setup["S32X_DIR"],
+        "exts": (".32x", ".bin", ".md"),
+        "db_sections": ["Sega - 32X"],
+        "id_pattern": r"(?:T-[0-9]{4,7}[A-Z]?|MK-[0-9]{5,8}|HDR-[0-9]{4,6})",
+        "gameid": ("Genesis", True, True, True),
+        "scanner": "scan_megadrive",
+    },
+
+    "Saturn": {
+        "display": "Sega - Saturn",
+        "root": _setup["SSA_DIR"],
+        "exts": (".cue", ".iso", ".chd"),
+        "db_sections": ["Sega - Saturn"],
+        "id_pattern": r"(?:T-[0-9]{7}|GS-[0-9]{4}|MK-[0-9]{3}|SGS-[0-9]{3})",
+        "gameid": ("Saturn", True, True, True),
+        "scanner": "scan_saturn",
+    },
+
+    "Dreamcast": {
+        "display": "Sega - Dreamcast",
+        "root": _setup["SDC_DIR"],
+        "exts": (".gdi", ".cue", ".chd"),
+        "db_sections": ["Sega - Dreamcast"],
+        "id_pattern": r"(?:T-[0-9]{4,5}[A-Z]?|HDR-[0-9]{4,6}|MK-[0-9]{5,8})",
+        "gameid": (None, False, False, False),
+        "scanner": "scan_dreamcast",
+    },
+
+    "PSX": {
+        "display": "Sony - PlayStation",
+        "root": _setup["PSX_DIR"],
+        "exts": (".cue", ".iso", ".chd"),
+        "db_sections": ["Sony - PlayStation"],
+        "id_pattern": r"(?:SLUS|SLES|SLPS|SLPM|SCUS|SCES|SCED|SCPS|SLED|HDR|PCPX|PAPX|PBPX|DTL)[_\-\.]?\d{3}[_\-\.]?\d{2}",
+        "gameid": ("PSX", True, True, True),
+        "scanner": "scan_psx",
+    },
+
+    "PS2": {
+        "display": "Sony - PlayStation 2",
+        "root": _setup["PS2_DIR"],
+        "exts": (".iso", ".chd"),
+        "db_sections": ["Sony - PlayStation 2"],
+        "id_pattern": r"(?:SLES|SLPM|SLUS|SLPS|SCED|SCES|SCUS|SLKA|SCPS|SLED|SCKA|SCAJ|PCPX|PAPX|PBPX|SCCS|TCES|SCPN|TLES|PSXC|SCPM)[_\-\.]?\d{3}[_\-\.]?\d{2}",
+        "gameid": ("PS2", True, True, True),
+        "scanner": "scan_ps2",
+    },
+
+    "PSP": {
+        "display": "Sony - PlayStation Portable",
+        "root": _setup["PSP_DIR"],
+        "exts": (".iso", ".cso", ".chd"),
+        "db_sections": ["Sony - PlayStation Portable"],
+        "id_pattern": r"(?:ULES|ULJM|ULUS|ULJS|UCES|UCUS|ULKS|UCAS|UCJS|ULAS|UCKS|UCET|UCED|UCJP|UCJX|ULET|UCJB|ROSE|UTST|NPEG|NPUG|NPJG|NPJG|NPHG|HONEY|KAD)[_\-\.]?\d{3}[_\-\.]?\d{2}",
+        "gameid": ("PSP", True, True, True),
+        "scanner": "scan_psp",
+    },
+}
+
+# For debuging
+ENABLED_SYSTEMS = {
+    "ARCADE",
+    "GW",
+    "GB",
+    "GBC",
+    "GBA",
+    "NDS",
+    "3DS",
+    "NES",
+    "SNES",
+    "VB",
+    "N64",
+    "GC",
+    "WII",
+    "MasterSys",
+    "GameGear",
+    "Genesis",
+    "SegaCD",
+    "32X",
+    "Saturn",
+    "Dreamcast",
+    "PSX",
+    "PS2",
+    "PSP",
+}
+
+GAMEID_RE = {}
+for sys_key, cfg in SYSTEMS.items():
+    pat = cfg["id_pattern"]
+    if not pat:
+        continue
+        
+    GAMEID_RE[sys_key] = re.compile(rf"(?<![A-Z0-9])({pat})(?![A-Z0-9])")
+
 # ============================================================
 # ====================== SHARED HELPERS ======================
 # ============================================================
@@ -139,28 +422,22 @@ def split_filename(filename):
     # -----------------------------------------------
     lowered = name.lower()
     for cw in CODEWORDS:
-        cw_l = cw.lower()
-        if cw_l in lowered:
-            name = re.sub(
-                re.escape(cw),
-                "",
-                name,
-                flags=re.I
-            )
+        if cw.lower() in lowered:
+            name = re.sub(re.escape(cw), "", name, flags=re.I)
             lowered = name.lower()
 
     # -----------------------------------------------
     # Extract remaining [tags]
     # -----------------------------------------------
-    tags = re.findall(r"\[[^\]]+\]", name)
+    raw_tags = re.findall(r"\[[^\]]+\]", name)
 
     base = name
-    for t in tags:
+    for t in raw_tags:
         base = base.replace(t, "")
 
     base = re.sub(r"\s+", " ", base).strip()
-    return base, tags
 
+    return base, raw_tags
 
 def normalize_db_lookup_id(game_id, system):
     if not game_id:
@@ -223,8 +500,6 @@ def clean_title(base, system=None):
 
     return title
 
-
-
 def detect_sector_mode(cue):
     sector, offset = 2352, 24
     with open(cue, "r", encoding="utf-8", errors="ignore") as f:
@@ -234,8 +509,7 @@ def detect_sector_mode(cue):
                 return 2048, 0
             if "MODE2/2352" in u:
                 return 2352, 24
-    return sector, offset
-    
+    return sector, offset 
 
 # ---------------------- CRC32 -------------------------------
 
@@ -376,7 +650,6 @@ def run_gameid(path, system):
     except Exception:
         return ""
 
-
 # ---------- Parse GameID.py output ----------
 def parse_gameid_output(text):
     data = {
@@ -478,6 +751,18 @@ def scan_gamewatch(path):
 # ==================== NINTENDO GAME BOY =====================
 # ============================================================
 
+def same_path(a, b):
+    if not a or not b:
+        return False
+    return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+
+gb_root  = SYSTEMS.get("GB", {}).get("root")
+gbc_root = SYSTEMS.get("GBC", {}).get("root")
+
+if same_path(gb_root, gbc_root):
+    # Merged GB/GBC folders → scan once (GB wins)
+    SYSTEMS.pop("GBC", None)
+    
 def scan_gb(path):
     try:
         with open(path, "rb") as f:
@@ -700,9 +985,6 @@ def scan_n64(path):
 # ============================================================
 # ===================== DOLPHIN HELPER =======================
 # ============================================================
-
-RE_DOLPHIN_ID    = re.compile(r"^Game ID:\s*([A-Z0-9]{6})", re.I)
-RE_DOLPHIN_TITLE = re.compile(r"^Internal Name:\s*(.+)", re.I)
 
 def run_dolphin_tool(path):
     try:
@@ -1340,32 +1622,6 @@ def should_skip_disc(filename, sibling_filenames):
             return True
 
     return False
-
-ENABLED_SYSTEMS = {
-    "ARCADE",
-    "GW",
-    "GB",
-    "GBC",
-    "GBA",
-    "NDS",
-    "3DS",
-    "NES",
-    "SNES",
-    "VB",
-    "N64",
-    "GC",
-    "WII",
-    "MasterSys",
-    "GameGear",
-    "Genesis",
-    "SegaCD",
-    "32X",
-    "Saturn",
-    "Dreamcast",
-    "PSX",
-    "PS2",
-    "PSP",
-}
     
 def scan_systems():
 
@@ -1444,7 +1700,7 @@ def scan_systems():
                 # 2) Filename fast scan
                 # ==============================================
                 if not game_id:
-                    m = pat.search(filename)
+                    m = pat.search(f"{os.path.basename(os.path.dirname(path))} {filename}")
                     if m:
                         game_id = m.group(1)
                         gameid_source = "filename"
@@ -1544,7 +1800,11 @@ def scan_systems():
             if not gameid_title and not SKIP_DATABASE and game_id:
                 db_title = lookup_db_title(game_id, SYSTEM)
                 if db_title:
-                    gameid_title = " ".join([db_title] + tags)
+                    gameid_title = " ".join([db_title] + [
+                                        t for t in tags
+                                        if game_id and t.strip("[]").upper() != game_id.upper()
+                                    ])
+
                     title_source = "database"
 
             # --------------------------------------------------
@@ -1593,279 +1853,24 @@ def scan_systems():
                 filename
             )
 
-
 # ============================================================
-# ========================= SYSTEMS ==========================
-# ============================================================
-
-SYSTEMS = {
-
-#    "SYSTEM": {
-#        "display": "Manufacturer - System Name",
-#        "root": _setup["SYS_DIR"],
-#        "exts": .iso,
-#        "db_sections": ["Manufacturer - System Name"],
-#        "id_pattern": Regular expression describing a valid game ID, 
-#        "gameid": (system_arg, supports_id, supports_title, supports_crc),
-#        "scanner": scan_system,
-#    },
-
-    "ARCADE": {
-        "display": "FBNeo - Arcade Games",
-        "root": _setup["ARC_DIR"],
-        "exts": (".zip",),
-        "db_sections": ["FBNeo - Arcade Games"],
-        "id_pattern": r"[a-z0-9_]+",
-        "gameid": (None, False, False, False),
-        "scanner": None,
-    },
-
-    "GW": {
-        "display": "Handheld Electronic Game",
-        "root": _setup["NGW_DIR"],
-        "exts": (".zip",),
-        "db_sections": ["Handheld Electronic Game"],
-        "id_pattern": r"[A-Z]{2}-[0-9]{2,3}[A-Z]?",
-        "gameid": (None, False, False, False),
-        "scanner": scan_gamewatch,
-    },
-
-    "GB": {
-        "display": "Nintendo - Game Boy",
-        "root": _setup["GB_DIR"],
-        "exts": (".gb",".gbc"),
-        "db_sections": ["Nintendo - Game Boy", "Nintendo - Game Boy Color"],
-        "id_pattern": r"(?:CGB|DMG)-[A-Z0-9]{4}",
-        "gameid": ("GBC", True, True, True),
-        "scanner": scan_gb,
-    },
-
-    "GBC": {
-        "display": "Nintendo - Game Boy Color",
-        "root": _setup["GBC_DIR"],
-        "exts": (".gb",".gbc"),
-        "db_sections": ["Nintendo - Game Boy", "Nintendo - Game Boy Color"],
-        "id_pattern": r"(?:CGB|DMG)-[A-Z0-9]{4}",
-        "gameid": ("GBC", True, True, True),
-        "scanner": scan_gb,
-    },
-
-    "GBA": {
-        "display": "Nintendo - Game Boy Advance",
-        "root": _setup["GBA_DIR"],
-        "exts": (".gba",),
-        "db_sections": ["Nintendo - Game Boy Advance"],
-        "id_pattern": r"AGB-[A-Z0-9]{4}",
-        "gameid": ("GBA", True, True, True),
-        "scanner": scan_gba,
-    },
-
-    "NDS": {
-        "display": "Nintendo - Nintendo DS",
-        "root": _setup["NDS_DIR"],
-        "exts": (".nds",),
-        "db_sections": ["Nintendo - Nintendo DS"],
-        "id_pattern": r"[A-Z]{4}[A-Z0-9]{4}",
-        "gameid": (None, False, False, False),
-        "scanner": scan_ds,
-    },
-
-    "3DS": {
-        "display": "Nintendo - Nintendo 3DS",
-        "root": _setup["N3DS_DIR"],
-        "exts": (".3ds",),
-        "db_sections": ["Nintendo - Nintendo 3DS"],
-        "id_pattern": r"(?:CTR|KTR|BBB)-[A-Z0-9]{4}",
-        "gameid": (None, False, False, False),
-        "scanner": scan_3ds,
-    },
-
-    "NES": {
-        "display": "Nintendo - Nintendo Entertainment System",
-        "root": _setup["NES_DIR"],
-        "exts": (".nes",),
-        "db_sections": ["Nintendo - Nintendo Entertainment System"],
-        "id_pattern": r"$^",
-        "gameid": ("NES", True, True, True),
-        "scanner": None,
-    },
-
-    "SNES": {
-        "display": "Nintendo - Super Nintendo Entertainment System",
-        "root": _setup["SNES_DIR"],
-        "exts": (".sfc", ".smc"),
-        "db_sections": ["Nintendo - Super Nintendo Entertainment System"],
-        "id_pattern": r"(?:SHVC|SNSP|SNS|SFT)[-_]?[A-Z0-9]{2,6}",
-        "gameid": ("SNES", True, True, True),
-        "scanner": None,
-    },
-
-    "VB": {
-        "display": "Nintendo - Virtual Boy",
-        "root": _setup["NVB_DIR"],
-        "exts": (".vb", ".vboy", ".bin"),
-        "db_sections": ["Nintendo - Virtual Boy"],
-        "id_pattern": r"[A-Z0-9]{3,8}",
-        "gameid": (None, False, False, False),
-        "scanner": None,
-    },
-
-    "N64": {
-        "display": "Nintendo - Nintendo 64",
-        "root": _setup["N64_DIR"],
-        "exts": (".z64", ".n64", ".v64"),
-        "db_sections": ["Nintendo - Nintendo 64"],
-        "id_pattern": r"NUS-[A-Z0-9]{4}",
-        "gameid": ("N64", True, True, True),
-        "scanner": scan_n64,
-    },
-
-    "GC": {
-        "display": "Nintendo - GameCube",
-        "root": _setup["NGC_DIR"],
-        "exts": (".iso", ".gcm", ".rvz", ".wbfs"),
-        "db_sections": ["Nintendo - GameCube and Nintendo - Wii"],
-        "id_pattern": r"[A-Z]{4}[0-9]{2}",
-        "gameid": ("GC", True, True, True),
-        "scanner": scan_gamecube,
-    },
-
-    "WII": {
-        "display": "Nintendo - Wii",
-        "root": _setup["WII_DIR"],
-        "exts": (".iso", ".wbfs", ".rvz"),
-        "db_sections": ["Nintendo - GameCube and Nintendo - Wii"],
-        "id_pattern": r"[A-Z]{4}[0-9]{2}",
-        "gameid": ("GC", True, True, True),
-        "scanner": scan_wii,
-    },
-
-    "MasterSys": {
-        "display": "Sega - Master System - Mark III",
-        "root": _setup["SMS_DIR"],
-        "exts": (".sms", ".bin"),
-        "db_sections": ["Sega - Master System - Mark III"],
-        "id_pattern": r"$^",
-        "gameid": (None, False, False, False),
-        "scanner": None,
-    },
-        
-    "GameGear": {
-        "display": "Sega - Game Gear",
-        "root": _setup["SGG_DIR"],
-        "exts": (".gg",),
-        "db_sections": None,
-        "id_pattern": r"$^",
-        "gameid": (None, False, False, False),
-        "scanner": None,
-    },
-
-    "Genesis": {
-        "display": "Sega - Mega Drive - Genesis",
-        "root": _setup["SMD_DIR"],
-        "exts": (".md", ".bin", ".smd", ".gen"),
-        "db_sections": ["Sega - Mega Drive - Genesis"],
-        "id_pattern": r"(?:T-[0-9]{4,7}[A-Z]?|MK-[0-9]{5,8}|HDR-[0-9]{4,6}|\b(?!19(?:8[0-9]|9[0-9]))[0-9]{4}\b)",
-        "gameid": ("Genesis", True, True, True),
-        "scanner": scan_megadrive,
-    },
-    
-    "SegaCD": {
-        "display": "Sega - Mega-CD - Sega CD",
-        "root": _setup["SCD_DIR"],
-        "exts": (".cue", ".iso", ".chd"),
-        "db_sections": ["Sega - Mega-CD - Sega CD"],
-        "id_pattern": r"(?:T-[0-9]{4,7}[A-Z]?|MK-[0-9]{5,8}|HDR-[0-9]{4,6})",
-        "gameid": ("SegaCD", True, True, True),
-        "scanner": scan_segacd,
-    },
-
-    "32X": {
-        "display": "Sega - 32X",
-        "root": _setup["S32X_DIR"],
-        "exts": (".32x", ".bin", ".md"),
-        "db_sections": ["Sega - 32X"],
-        "id_pattern": r"(?:T-[0-9]{4,7}[A-Z]?|MK-[0-9]{5,8}|HDR-[0-9]{4,6})",
-        "gameid": ("Genesis", True, True, True),
-        "scanner": scan_megadrive,
-    },
-
-    "Saturn": {
-        "display": "Sega - Saturn",
-        "root": _setup["SSA_DIR"],
-        "exts": (".cue", ".iso", ".chd"),
-        "db_sections": ["Sega - Saturn"],
-        "id_pattern": r"(?:T-[0-9]{7}|GS-[0-9]{4}|MK-[0-9]{3}|SGS-[0-9]{3})",
-        "gameid": ("Saturn", True, True, True),
-        "scanner": scan_saturn,
-    },
-
-    "Dreamcast": {
-        "display": "Sega - Dreamcast",
-        "root": _setup["SDC_DIR"],
-        "exts": (".gdi", ".cue", ".chd"),
-        "db_sections": ["Sega - Dreamcast"],
-        "id_pattern": r"(?:T-[0-9]{4,5}[A-Z]?|HDR-[0-9]{4,6}|MK-[0-9]{5,8})",
-        "gameid": (None, False, False, False),
-        "scanner": scan_dreamcast,
-    },
-
-    "PSX": {
-        "display": "Sony - PlayStation",
-        "root": _setup["PSX_DIR"],
-        "exts": (".cue", ".iso", ".chd"),
-        "db_sections": ["Sony - PlayStation"],
-        "id_pattern": r"(?:SLUS|SLES|SLPS|SLPM|SCUS|SCES|SCED|SCPS|SLED|HDR|PCPX|PAPX|PBPX|DTL)[_\-\.]?\d{3}[_\-\.]?\d{2}",
-        "gameid": ("PSX", True, True, True),
-        "scanner": scan_psx,
-    },
-
-    "PS2": {
-        "display": "Sony - PlayStation 2",
-        "root": _setup["PS2_DIR"],
-        "exts": (".iso", ".chd"),
-        "db_sections": ["Sony - PlayStation 2"],
-        "id_pattern": r"(?:SLES|SLPM|SLUS|SLPS|SCED|SCES|SCUS|SLKA|SCPS|SLED|SCKA|SCAJ|PCPX|PAPX|PBPX|SCCS|TCES|SCPN|TLES|PSXC|SCPM)[_\-\.]?\d{3}[_\-\.]?\d{2}",
-        "gameid": ("PS2", True, True, True),
-        "scanner": scan_ps2,
-    },
-
-    "PSP": {
-        "display": "Sony - PlayStation Portable",
-        "root": _setup["PSP_DIR"],
-        "exts": (".iso", ".cso", ".chd"),
-        "db_sections": ["Sony - PlayStation Portable"],
-        "id_pattern": r"(?:ULES|ULJM|ULUS|ULJS|UCES|UCUS|ULKS|UCAS|UCJS|ULAS|UCKS|UCET|UCED|UCJP|UCJX|ULET|UCJB|ROSE|UTST|NPEG|NPUG|NPJG|NPJG|NPHG|HONEY|KAD)[_\-\.]?\d{3}[_\-\.]?\d{2}",
-        "gameid": ("PSP", True, True, True),
-        "scanner": scan_psp,
-    },
-}
- 
-# ============================================================
-# ============ NORMALIZE MERGED SYSTEM ROOTS =================
+# ==================== RESOLVE SCANNERS ======================
 # ============================================================
 
-def same_path(a, b):
-    if not a or not b:
-        return False
-    return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
-
-gb_root  = SYSTEMS.get("GB", {}).get("root")
-gbc_root = SYSTEMS.get("GBC", {}).get("root")
-
-if same_path(gb_root, gbc_root):
-    # Merged GB/GBC folders → scan once (GB wins)
-    SYSTEMS.pop("GBC", None)
-
-
-GAMEID_RE = {}
 for sys_key, cfg in SYSTEMS.items():
-    pat = cfg["id_pattern"]
-    if not pat:
-        continue
-        
-    GAMEID_RE[sys_key] = re.compile(rf"(?<![A-Z0-9])({pat})(?![A-Z0-9])")
+    scanner = cfg.get("scanner")
 
+    # Normalize string "None" → None
+    if scanner in (None, "None"):
+        cfg["scanner"] = None
+        continue
+
+    # Resolve string name → function
+    if isinstance(scanner, str):
+        fn = globals().get(scanner)
+        if not callable(fn):
+            raise RuntimeError(f"Scanner '{scanner}' for system '{sys_key}' is not defined")
+        cfg["scanner"] = fn
 
 # ============================================================
 # ============================ MAIN =========================
