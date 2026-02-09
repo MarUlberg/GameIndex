@@ -529,6 +529,15 @@ def crc32_file(path, skip_header=0):
 # ======================== OVERRIDE ==========================
 # ============================================================
 
+def skip_scan(filename, system):
+    name = os.path.splitext(filename)[0].lower()
+
+    if system == "ARCADE":
+        if name in ("neogeo",):
+            return True
+
+    return False
+
 def scan_override(filename):
     """
     Detect special override titles (e.g. CodeBreaker).
@@ -751,6 +760,37 @@ def scan_gamewatch(path):
 # ==================== NINTENDO GAME BOY =====================
 # ============================================================
 
+def lookup_gb_serial_prefix(cart_id):
+    try:
+        path = resource_path("serialdatabase.txt")
+        if not os.path.exists(path):
+            return None
+
+        cart_id = cart_id.strip().upper()
+        target_sections = {"Nintendo - Game Boy", "Nintendo - Game Boy Color"}
+        current_section = None
+
+        with open(path, "r", encoding="utf-8") as f:
+            for raw in f:
+                line = raw.strip()
+                if not line or line.startswith("#"):
+                    continue
+                # Section header
+                if line.startswith("[") and line.endswith("]"):
+                    current_section = line[1:-1].strip()
+                    continue
+                if current_section not in target_sections:
+                    continue
+                if "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                if k.strip().upper() == cart_id:
+                    return v.strip().upper()
+    except Exception:
+        pass
+
+    return None
+
 def same_path(a, b):
     if not a or not b:
         return False
@@ -779,16 +819,23 @@ def scan_gb(path):
         if not re.fullmatch(rb"[A-Z]{4}", id_bytes):
             return None
 
-        # Next byte must be a valid CGB compatibility flag
         # 0x80 = CGB supported
         # 0xC0 = CGB only
         if flag not in (0x80, 0xC0):
             return None
 
-        return id_bytes.decode("ascii")
+        cart_id = id_bytes.decode("ascii")
+
+        prefix = lookup_gb_serial_prefix(cart_id)
+        if prefix:
+            return f"{prefix}-{cart_id}"
+
+        # EXACT legacy behavior fallback
+        return cart_id
 
     except Exception:
         return None
+
 
 # ============================================================
 # ================ NINTENDO GAME BOY ADVANCE =================
@@ -845,30 +892,37 @@ def scan_ds(path):
 
 def load_3ds_serial_database(path=None):
     if path is None:
-        path = resource_path("3dsserialdatabase.txt")
+        path = resource_path("serialdatabase.txt")
 
     db = {}
 
     if not os.path.exists(path):
         return db
 
+    parser = configparser.ConfigParser(interpolation=None)
+
     with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" not in line:
-                continue
+        lines = f.readlines()
 
-            k, v = line.split("=", 1)
-            k = k.strip().upper()
-            v = v.strip().upper()
+    # Skip junk before first section header
+    while lines and not lines[0].lstrip().startswith("["):
+        lines.pop(0)
 
-            if re.fullmatch(r"[0-9A-F]{16}", k) and re.fullmatch(r"(CTR|KTR|BBB)-[A-Z0-9]{4}", v):
-                db[k] = v
+    parser.read_string("".join(lines))
+
+    section = "Nintendo - Nintendo 3DS"
+    if not parser.has_section(section):
+        return db
+
+    for k, v in parser.items(section):
+        k = k.strip().upper()
+        v = v.strip().upper()
+
+        if re.fullmatch(r"[0-9A-F]{16}", k) and re.fullmatch(r"(CTR|KTR|BBB)-[A-Z0-9]{4}", v):
+            db[k] = v
 
     return db
-THREEDS_SERIAL_DB = load_3ds_serial_database()
+
 
 def scan_3ds(path):
     """
@@ -1678,12 +1732,15 @@ def scan_systems():
             # ==============================================
             # 1) Override
             # ==============================================
+            if skip_scan(filename, SYSTEM):
+                continue
+
             override = scan_override(filename)
             if override:
                 override_title, override_id = override
-                gameid_title= override_title
+                gameid_title = override_title
                 game_id = override_id
-                
+
                 yield (
                     display,
                     gameid_title,
@@ -1692,7 +1749,8 @@ def scan_systems():
                     "override",
                     filename
                 )
-                continue               
+                continue
+                       
                 
             if not SKIP_SCAN:
 
@@ -1700,10 +1758,15 @@ def scan_systems():
                 # 2) Filename fast scan
                 # ==============================================
                 if not game_id:
-                    m = pat.search(f"{os.path.basename(os.path.dirname(path))} {filename}")
-                    if m:
-                        game_id = m.group(1)
+                    if SYSTEM == "ARCADE":
+                        game_id = os.path.splitext(filename)[0]
                         gameid_source = "filename"
+                    else:
+                        m = pat.search(f"{os.path.basename(os.path.dirname(path))} {filename}")
+                        if m:
+                            game_id = m.group(1)
+                            gameid_source = "filename"
+
                     
                 # ==================================================
                 # 3) CHD / CSO → filename → CRC

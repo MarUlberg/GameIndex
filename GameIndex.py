@@ -1929,42 +1929,68 @@ def keep_rom_named_cover(stem):
             return True
     return False
 
-def sync_covers(src_name, src_root, tgt_name, tgt_root):
-    rows = load_playtime_export()
+def sync_screenshots(mode, src_key):
+    rows = load_local()
     if not rows:
-        print("playtime_export.txt not found or empty.")
+        print("local_games.txt not found or empty.")
         return
 
-    local_rows = load_local()
-    allowed_platforms = set()
+    image_exts = (".png", ".jpg", ".jpeg")
+    ps2_id_pat = re.compile(VALID_GAMEID_PATTERNS[1], re.I)
 
-    for line in local_rows:
-        try:
-            platform, _, _, _ = [x.strip() for x in line.split("|", 3)]
-            allowed_platforms.add(platform)
-        except:
-            continue
+    proc_file = os.path.join(os.path.dirname(__file__), "processedscreens.txt")
 
-    if tgt_name == "PCSX2":
-        allowed_platforms &= set(SYSTEMS["PS2"]["platforms"])
-    elif tgt_name == "Dolphin":
-        allowed_platforms &= set(
-            SYSTEMS["GC"]["platforms"] + SYSTEMS["WII"]["platforms"]
-        )
+    # --------------------------------------------------
+    # Load processed registry:
+    # (platform, target, identity) -> timestamp
+    # --------------------------------------------------
+    processed = {}
+    if os.path.isfile(proc_file):
+        with open(proc_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    plat, target, ident, ts = line.split("|", 3)
+                    processed[(plat, target, ident)] = ts
+                except:
+                    continue
+
+    def save_processed():
+        with open(proc_file, "w", encoding="utf-8") as f:
+            for (plat, target, ident), ts in sorted(processed.items()):
+                f.write(f"{plat}|{target}|{ident}|{ts}\n")
+
+    def extract_ts(name):
+        m = re.search(r"-(\d{6})-(\d{6})$", os.path.splitext(name)[0])
+        if not m:
+            return None
+        return m.group(1) + m.group(2)
+
+    def extract_identity(name):
+        base = os.path.splitext(name)[0]
+
+        # RetroArch raw screenshots
+        if re.search(r"-\d{6}-\d{6}$", base):
+            return re.sub(r"-\d{6}-\d{6}$", "", base)
+
+        # Dolphin / PCSX2 (strip trailing timestamp block)
+        return re.sub(r"[_-]\d{8}[_-]\d{6}$", "", base)
+
+    def normalize_id(s):
+        return re.sub(r"[_\-.]", "", s.upper())
 
     def strip_lb_suffix(name):
         return re.sub(r"-\d+$", "", name)
 
-    def norm(s):
-        return re.sub(r"[^A-Z0-9]", "", s.upper())
-
-    # --------------------------------------------------
-    # Load LaunchBox ROM stem → Title map
-    # --------------------------------------------------
+    # ==================================================
+    # LOAD LAUNCHBOX TITLES (ROM stem → Title)
+    # ==================================================
     lb_title_map = {}
 
-    if tgt_name == "LaunchBox":
-        for platform, xmlfile in LAUNCHBOX_PLATFORMS.items():
+    if src_key in ("RA", "LB"):
+        for plat, xmlfile in LAUNCHBOX_PLATFORMS.items():
             path = os.path.join(LAUNCHBOX_DATA_DIR, xmlfile)
             if not os.path.exists(path):
                 continue
@@ -1980,103 +2006,141 @@ def sync_covers(src_name, src_root, tgt_name, tgt_root):
                 if not app or not title:
                     continue
                 stem = os.path.splitext(os.path.basename(app))[0]
-                lb_title_map[(platform, stem)] = title
+                lb_title_map[stem] = title
 
-    entries = []
+    copied_paths = []
+
     for line in rows:
         try:
-            platform, _, gameid, _, _, file = [x.strip() for x in line.split("|")]
-            if platform in allowed_platforms:
-                entries.append((platform, gameid, file))
+            platform, _, gameid, file = [x.strip() for x in line.split("|")]
         except:
             continue
 
-    copied = 0
-    image_exts = (".png", ".jpg", ".jpeg", ".webp")
-
-    for platform, gameid, file in entries:
         rom_stem = os.path.splitext(os.path.basename(file))[0]
+        lb_title = lb_title_map.get(rom_stem)
+
         src = None
+        src_name = None
 
         # --------------------------------------------------
-        # Resolve source directory
+        # RetroArch raw screenshots
         # --------------------------------------------------
-        if src_name == "LaunchBox":
-            src_dir = os.path.join(src_root, platform, LAUNCHBOX_COVER_SUBDIR)
-        elif src_name == "RetroArch":
-            src_dir = os.path.join(src_root, platform, RETROARCH_COVER_SUBDIR)
-        else:
-            src_dir = src_root
+        if src_key in ("RA_RAW", "ALL"):
+            root = os.path.join(RETROARCH_SCREEN_DIR, platform)
+            if os.path.isdir(root):
+                best = None
+                for r, _, files in os.walk(root):
+                    for f in files:
+                        b, e = os.path.splitext(f)
+                        if e.lower() not in image_exts:
+                            continue
+                        if re.sub(r"-\d{6}-\d{6}$", "", b) != rom_stem:
+                            continue
+                        ts = extract_ts(f)
+                        if not ts:
+                            continue
+                        if not best or ts > best[0]:
+                            best = (ts, os.path.join(r, f), f)
+                if best:
+                    src = best[1]
+                    src_name = best[2]
 
         # --------------------------------------------------
-        # Dolphin: flat directory, filenames are GameID.png
+        # Dolphin screenshots
         # --------------------------------------------------
-        if src_name == "Dolphin" and os.path.isdir(src_dir):
-            gid = norm(gameid)
-            for fname in os.listdir(src_dir):
-                base, ext = os.path.splitext(fname)
-                if ext.lower() in image_exts and norm(base) == gid:
-                    src = os.path.join(src_dir, fname)
-                    break
-
-        # --------------------------------------------------
-        # PCSX2: flat directory, filenames are GameID
-        # --------------------------------------------------
-        if not src and src_name == "PCSX2" and os.path.isdir(src_dir):
-            gid = norm(gameid)
-            for fname in os.listdir(src_dir):
-                base, ext = os.path.splitext(fname)
-                if ext.lower() in image_exts and norm(base) == gid:
-                    src = os.path.join(src_dir, fname)
-                    break
-
-        # --------------------------------------------------
-        # Title-based fallback (LB / RA sources only)
-        # --------------------------------------------------
-        if not src:
-            lb_title = lb_title_map.get((platform, rom_stem))
-            if lb_title and os.path.isdir(src_dir):
-                for fname in os.listdir(src_dir):
-                    base, ext = os.path.splitext(fname)
-                    if ext.lower() not in image_exts:
+        if not src and src_key in ("DOLPHIN", "ALL"):
+            root = os.path.join(DOLPHIN_SCREEN_DIR, gameid)
+            if os.path.isdir(root):
+                best = None
+                for f in os.listdir(root):
+                    if not f.lower().endswith(image_exts):
                         continue
-                    if filenames_equivalent(strip_lb_suffix(base), lb_title, strip_ext=False):
-                        src = os.path.join(src_dir, fname)
-                        break
+                    ts = extract_ts(f)
+                    if not ts:
+                        continue
+                    if not best or ts > best[0]:
+                        best = (ts, os.path.join(root, f), f)
+                if best:
+                    src = best[1]
+                    src_name = best[2]
 
-        if not src:
+        # --------------------------------------------------
+        # PCSX2 screenshots
+        # --------------------------------------------------
+        if not src and src_key in ("PCSX2", "ALL"):
+            if os.path.isdir(PCSX2_SCREEN_DIR):
+                best = None
+                for f in os.listdir(PCSX2_SCREEN_DIR):
+                    if not f.lower().endswith(image_exts):
+                        continue
+                    m = ps2_id_pat.search(f)
+                    if not m or normalize_id(m.group(0)) != normalize_id(gameid):
+                        continue
+                    ts = extract_ts(f)
+                    if not ts:
+                        continue
+                    if not best or ts > best[0]:
+                        best = (ts, os.path.join(PCSX2_SCREEN_DIR, f), f)
+                if best:
+                    src = best[1]
+                    src_name = best[2]
+
+        if not src or not src_name:
+            continue
+
+        identity = extract_identity(src_name)
+        ts = extract_ts(src_name)
+        if not identity or not ts:
             continue
 
         ext = os.path.splitext(src)[1]
 
-        # --------------------------------------------------
-        # Target naming
-        # --------------------------------------------------
-        if tgt_name == "LaunchBox":
-            tgt_dir = os.path.join(tgt_root, platform, LAUNCHBOX_COVER_SUBDIR)
-            os.makedirs(tgt_dir, exist_ok=True)
-            dst_name = make_launchbox_image_name(platform, rom_stem, ext)
-            if not dst_name:
+        targets = [mode] if mode in (1, 2) else [1, 2]
+
+        for t in targets:
+            if t == 1:
+                target_name = "LaunchBox"
+                tgt_root = os.path.join(
+                    LAUNCHBOX_IMG_DIR, platform, LAUNCHBOX_SCREEN_SUBDIR
+                )
+                name = make_launchbox_image_name(platform, rom_stem, ext)
+                if not name:
+                    continue
+            else:
+                target_name = "RetroArch"
+                tgt_root = os.path.join(
+                    RETROARCH_IMG_DIR, platform, RETROARCH_SCREEN_SUBDIR
+                )
+                name = sanitize_rom_filename(rom_stem) + ext
+
+            os.makedirs(tgt_root, exist_ok=True)
+
+            key = (platform, target_name, identity)
+            prev_ts = processed.get(key)
+
+            dst = os.path.join(tgt_root, name)
+
+            if prev_ts and ts <= prev_ts and os.path.exists(dst):
                 continue
 
-        elif tgt_name == "RetroArch":
-            tgt_dir = os.path.join(tgt_root, platform, RETROARCH_COVER_SUBDIR)
-            os.makedirs(tgt_dir, exist_ok=True)
-            dst_name = sanitize_rom_filename(rom_stem) + ext
+            if src_key in ("RA_RAW", "DOLPHIN", "PCSX2", "ALL"):
+                compress_and_copy_image(src, dst)
+            else:
+                shutil.copy2(src, dst)
 
-        else:
-            tgt_dir = tgt_root
-            dst_name = rom_stem + ext
+            copied_paths.append(dst)
+            processed[key] = ts
 
-        shutil.copy2(src, os.path.join(tgt_dir, dst_name))
-        copied += 1
+    save_processed()
 
-    if tgt_name == "LaunchBox":
-        print(f"Copied {copied} covers to LaunchBox cover art folder.")
-    elif tgt_name == "RetroArch":
-        print(f"Copied {copied} covers to RetroArch cover art folder.")
-    else:
-        print(f"Copied {copied} covers.")
+    if src_key in ("RA_RAW", "DOLPHIN", "PCSX2", "ALL"):
+        for p in copied_paths:
+            print(p)
+
+    if mode == 1:
+        print(f"Copied {len(copied_paths)} screenshots to LaunchBox gameplay picture folder.")
+    elif mode == 2:
+        print(f"Copied {len(copied_paths)} screenshots to RetroArch gameplay picture folder.")
 
 # ============================================================
 # ===================== RENAME ENGINE ========================
@@ -2087,10 +2151,6 @@ BIN_TRACK_RE = re.compile(r"^(.*?)(\s+\(Track\s+\d+\))\.bin$", re.I)
 CUE_RE = re.compile(r"^(.*)\.cue$", re.I)
 
 # ---------- Stem helpers ----------
-
-def split_stem(filename):
-    base, ext = filename.rsplit(".", 1)
-    return base + ".", ext.lower()
 
 def cue_base(filename):
     return filename.rsplit(".", 1)[0]
@@ -2171,8 +2231,8 @@ def rename_save_files(old_filename, new_filename, platform=None, system=None):
     if not os.path.isdir(saves_root):
         return
 
-    oldStem, _ = split_stem(old_filename)
-    newStem, _ = split_stem(new_filename)
+    oldStem = old_filename.rsplit(".", 1)[0]
+    newStem = new_filename.rsplit(".", 1)[0]
 
     roots = []
 
@@ -2415,19 +2475,18 @@ def build_modify_plans(old_lines, new_lines, local_rows, play_rows):
         play_map[(p, t, g, f)] = r
 
     replacements_local = {}
-    replacements_play  = {}
+    replacements_play = {}
     rename_jobs = []
-    time_jobs = []   # (platform, gameid, newfile, seconds, lastplayed)
+    time_jobs = []
+    processed_renames = []  # (platform, old_file, new_file)
 
     for old, new in zip(old_lines, new_lines):
         op, ot, og, opt, olp, of = parse(old)
         np, nt, ng, npt, nlp, nf = parse(new)
 
-        # Identity (platform / title / gameid) must match
         if (op, ot, og) != (np, nt, ng):
             raise RuntimeError(
-                "Identity change not allowed:\n"
-                + old + "\n" + new
+                "Identity change not allowed:\n" + old + "\n" + new
             )
 
         key = (op, ot, og, of)
@@ -2438,30 +2497,23 @@ def build_modify_plans(old_lines, new_lines, local_rows, play_rows):
 
         system = PLATFORM_TO_SYSTEM.get(op)
 
-        # --------------------------------------------------
-        # 🚫 HARD BLOCK: MAME-based systems
-        # --------------------------------------------------
+        # 🚫 MAME-based systems
         if system in ("ARCADE", "GW"):
             if ot != nt:
                 raise RuntimeError(
                     f"Title rename is not allowed for {op} (MAME-based system)"
                 )
-
             if of != nf:
                 raise RuntimeError(
                     f"ROM rename is not allowed for {op} (MAME-based system)"
                 )
 
-        # --------------------------------------------------
         # local_games.txt
-        # --------------------------------------------------
         replacements_local[local_map[key]] = (
             f"{op} | {ot} | {og} | {nf}"
         )
 
-        # --------------------------------------------------
         # playtime_export.txt
-        # --------------------------------------------------
         old_play = play_map.get(key)
         if old_play:
             if not npt and not nlp:
@@ -2479,39 +2531,89 @@ def build_modify_plans(old_lines, new_lines, local_rows, play_rows):
                     f"{op} | {ot} | {og} | {npt} | {nlp} | {nf}"
                 )
 
-        # --------------------------------------------------
-        # Filename rename (non-MAME only)
-        # --------------------------------------------------
+        # ROM rename jobs
         if of != nf:
             rom_dir = os.path.join(GAMES_DIR, op)
             rename_jobs.extend(
                 expand_multidisc_renames(rom_dir, of, nf)
             )
+            processed_renames.append((op, of, nf))
 
-        # --------------------------------------------------
-        # Playtime propagation
-        # --------------------------------------------------
+        # playtime propagation
         if (npt or nlp) or (opt != npt or olp != nlp):
             seconds = parse_seconds(npt)
             time_jobs.append((op, og, nf, seconds, nlp))
 
-    return replacements_local, replacements_play, rename_jobs, time_jobs
+    return (
+        replacements_local,
+        replacements_play,
+        rename_jobs,
+        time_jobs,
+        processed_renames,
+    )
 
 def run_modify_direct(old_lines, new_lines):
     local_rows = load_local()
     play_rows = load_playtime_export()
 
-    replacements_local, replacements_play, rename_jobs, time_jobs = \
-        build_modify_plans(old_lines, new_lines, local_rows, play_rows)
+    (
+        replacements_local,
+        replacements_play,
+        rename_jobs,
+        time_jobs,
+        processed_renames,
+    ) = build_modify_plans(old_lines, new_lines, local_rows, play_rows)
 
-    # ---- Renames ----
+    # ----------------------------------
+    # ROM renames + filesystem effects
+    # ----------------------------------
     apply_rename_jobs(rename_jobs)
 
-    # ---- Databases ----
+    # ----------------------------------
+    # Databases
+    # ----------------------------------
     replace_lines_in_file(LOCAL_DB, replacements_local)
     replace_lines_in_file(PLAYTIME_EXPORT, replacements_play)
 
-    # ---- Playtime ----
+    # ----------------------------------
+    # processedscreens.txt
+    # ----------------------------------
+    proc_file = os.path.join(os.path.dirname(__file__), "processedscreens.txt")
+    proc_lines = []
+
+    if os.path.isfile(proc_file):
+        with open(proc_file, "r", encoding="utf-8") as f:
+            proc_lines = [l.rstrip("\n") for l in f]
+
+    if proc_lines and processed_renames:
+        new_proc = []
+
+        for line in proc_lines:
+            try:
+                plat, target, ident, ts = line.split("|", 3)
+            except:
+                new_proc.append(line)
+                continue
+
+            for p, oldf, newf in processed_renames:
+                if plat != p:
+                    continue
+
+                old_base = os.path.splitext(oldf)[0]
+                new_base = os.path.splitext(newf)[0]
+
+                if ident.startswith(old_base):
+                    ident = new_base + ident[len(old_base):]
+
+            new_proc.append(f"{plat}|{target}|{ident}|{ts}")
+
+        with open(proc_file, "w", encoding="utf-8") as f:
+            for l in new_proc:
+                f.write(l + "\n")
+
+    # ----------------------------------
+    # Playtime propagation
+    # ----------------------------------
     for platform, gameid, filename, seconds, lastplayed in time_jobs:
         write_retroarch_time(filename, seconds, lastplayed)
         write_launchbox_time(platform, gameid, filename, seconds, lastplayed)
@@ -2519,12 +2621,11 @@ def run_modify_direct(old_lines, new_lines):
         system = PLATFORM_TO_SYSTEM.get(platform)
 
         if use_standalone_emulator(system):
-
             if system in ("GC", "WII"):
                 write_dolphin_time(gameid, seconds)
-
             if system == "PS2":
                 write_pcsx2_time(gameid, seconds, lastplayed)
+
 
 # ============================================================
 # ===================== COMMAND ENGINE ======================
@@ -3573,7 +3674,7 @@ def cmd_sync_covers():
 def cmd_sync_screenshots():
     global SYNC_BOTH_ACTIVE
 
-    print(f"\n{Fore.LIGHTRED_EX}[WARNING]{Style.RESET_ALL} This will overwrite all images in the target folder.\n")
+    print(f"\n{Fore.LIGHTRED_EX}[WARNING]{Style.RESET_ALL} This will overwrite all images in the target folder. \nAlways uses the most recent screenshot for each game.\n")
 
     # =========================================================
     # SOURCE SELECTION
@@ -3824,8 +3925,8 @@ def apply_rename_jobs(rename_jobs):
         # RetroArch core configs (stem-based)
         # ----------------------------------
         if system:
-            oldStem, _ = split_stem(old_file)
-            newStem, _ = split_stem(new_file)
+            oldStem = old_file.rsplit(".", 1)[0]
+            newStem = new_file.rsplit(".", 1)[0]
 
             for core in SYSTEM_TO_CORES.get(system, []):
                 core_cfg_dir = os.path.join(RETROARCH_CFG_DIR, core)
