@@ -890,6 +890,24 @@ def scan_ds(path):
 # ======================= NINTENDO 3DS =======================
 # ============================================================
 
+def scan_3ds_filename(filename):
+
+    # --------------------------------------------------
+    # 1) CTR-U-ABEP → CTR-ABEP
+    # --------------------------------------------------
+    m = re.search(r"\b(CTR|KTR|BBB)-[A-Z]-([A-Z0-9]{4})\b", filename)
+    if m:
+        return f"{m.group(1)}-{m.group(2)}"
+
+    # --------------------------------------------------
+    # 2) Retail TitleID → serialdatabase lookup
+    # --------------------------------------------------
+    m = re.search(r"\b(00040000[0-9A-F]{8})\b", filename)
+    if m:
+        return THREEDS_SERIAL_DB.get(m.group(1))
+
+    return None
+
 def load_3ds_serial_database(path=None):
     if path is None:
         path = resource_path("serialdatabase.txt")
@@ -923,6 +941,7 @@ def load_3ds_serial_database(path=None):
 
     return db
 
+THREEDS_SERIAL_DB = load_3ds_serial_database()
 
 def scan_3ds(path):
     """
@@ -1766,6 +1785,12 @@ def scan_systems():
                         if m:
                             game_id = m.group(1)
                             gameid_source = "filename"
+
+                        if not game_id and SYSTEM == "3DS":
+                            gid = scan_3ds_filename(filename)
+                            if gid:
+                                game_id = gid
+                                gameid_source = "filename"
 
                     
                 # ==================================================
