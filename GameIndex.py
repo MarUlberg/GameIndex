@@ -7,6 +7,7 @@ import zlib
 import shutil
 import string
 import struct
+import hashlib
 import datetime
 import subprocess
 import unicodedata
@@ -14,6 +15,7 @@ import configparser
 import xml.etree.ElementTree as ET
 from io import BytesIO
 from PIL import Image
+from collections import defaultdict
 from colorama import Fore, Style, init
 
 init()
@@ -296,6 +298,105 @@ def use_standalone_emulator(system):
 # ------------------------------------------------------------
 SETUP = load_setup(CONFIG_FILE)
 
+def build_platform_maps(setup):
+    plats = setup.get("PLATFORMS", {})
+    lb = {}
+    ra = {}
+
+    for _, info in plats.items():
+        platform = info.get("retroarch")
+        xml = info.get("xml")
+
+        if not platform or not xml:
+            continue
+
+        # platform name used everywhere else (RA, local DB, scans)
+        ra[platform] = platform
+
+        # authoritative LaunchBox XML for that platform
+        lb[platform] = xml
+
+    return lb, ra
+
+
+LAUNCHBOX_PLATFORMS, RETROARCH_PLATFORMS = build_platform_maps(SETUP)
+
+def get_games_dir(platform):
+    plats = SETUP.get("PLATFORMS", {})
+    info = plats.get(platform)
+    if not info:
+        return None
+
+    games_folder = info.get("games")
+    if not games_folder:
+        return None
+
+    return os.path.join(GAMES_DIR, games_folder)
+
+def get_launchbox_cover_dir(platform):
+    plats = SETUP.get("PLATFORMS", {})
+    info = plats.get(platform)
+    if not info:
+        return None
+
+    lb_name = info.get("launchbox")
+    if not lb_name:
+        return None
+
+    return os.path.join(
+        LAUNCHBOX_IMG_DIR,
+        lb_name,
+        LAUNCHBOX_COVER_SUBDIR,
+    )
+
+def get_launchbox_screen_dir(platform):
+    plats = SETUP.get("PLATFORMS", {})
+    info = plats.get(platform)
+    if not info:
+        return None
+
+    lb_name = info.get("launchbox")
+    if not lb_name:
+        return None
+
+    return os.path.join(
+        LAUNCHBOX_IMG_DIR,
+        lb_name,
+        LAUNCHBOX_SCREEN_SUBDIR,
+    )
+
+def get_retroarch_cover_dir(platform):
+    plats = SETUP.get("PLATFORMS", {})
+    info = plats.get(platform)
+    if not info:
+        return None
+
+    ra_name = info.get("retroarch")
+    if not ra_name:
+        return None
+
+    return os.path.join(
+        RETROARCH_IMG_DIR,
+        ra_name,
+        RETROARCH_COVER_SUBDIR,
+    )
+
+def get_retroarch_screen_dir(platform):
+    plats = SETUP.get("PLATFORMS", {})
+    info = plats.get(platform)
+    if not info:
+        return None
+
+    ra_name = info.get("retroarch")
+    if not ra_name:
+        return None
+
+    return os.path.join(
+        RETROARCH_IMG_DIR,
+        ra_name,
+        RETROARCH_SCREEN_SUBDIR,
+    )
+
 CODEWORDS = [
     "(patched)", "[patched]", "(hack)", "[hack]",
 ]
@@ -307,7 +408,6 @@ CODEWORDS = [
 LOCAL_DB        = "local_games.txt"
 HISTORY         = "history.txt"
 PLAYTIME_EXPORT = "playtime_export.txt"
-SCANNER_EXEC, SCANNER_SCRIPT = resolve_scanner()
 
 PRINT_ALL = bool(SETUP.get("PRINT_ALL", False))
 
@@ -329,18 +429,17 @@ RETROARCH_SCREEN_SUBDIR = SETUP.get("RETROARCH_SCREEN_SUBDIR", "Named_Snaps")
 # --- Dolphin (optional) ---
 DOLPHIN_DIR      = SETUP.get("DOLPHIN_DIR")
 DOLPHIN_PLAYTIME = SETUP.get("DOLPHIN_PLAYTIME")
-DOLPHIN_IMG_DIR  = SETUP.get("DOLPHIN_IMG_DIR")
+DOLPHIN_COVER_DIR  = SETUP.get("DOLPHIN_COVER_DIR")
 DOLPHIN_SCREEN_DIR  = SETUP.get("DOLPHIN_SCREEN_DIR")
 
 # --- PCSX2 (optional) ---
 PCSX2_DIR        = SETUP.get("PCSX2_DIR")
 PCSX2_PLAYTIME   = SETUP.get("PCSX2_PLAYTIME")
-PCSX2_IMG_DIR    = SETUP.get("PCSX2_IMG_DIR")
+PCSX2_COVER_DIR    = SETUP.get("PCSX2_COVER_DIR")
 PCSX2_SCREEN_DIR    = SETUP.get("PCSX2_SCREEN_DIR")
 
 # --- LaunchBox (optional) ---
 LAUNCHBOX_DATA_DIR      = SETUP.get("LAUNCHBOX_DATA_DIR")
-LAUNCHBOX_PLATFORMS     = SETUP.get("LAUNCHBOX_PLATFORMS")
 LAUNCHBOX_IMG_DIR       = SETUP.get("LAUNCHBOX_IMG_DIR")
 LAUNCHBOX_COVER_SUBDIR  = SETUP.get("LAUNCHBOX_COVER_SUBDIR", "Box - Front")
 LAUNCHBOX_SCREEN_SUBDIR = SETUP.get("LAUNCHBOX_SCREEN_SUBDIR", "Screenshot - Gameplay")
@@ -663,6 +762,11 @@ PLATFORM_TO_SYSTEM = {plat: sys for sys, d in SYSTEMS.items() for plat in d["pla
 SYSTEM_TO_CORES = {sys: d["cores"] for sys, d in SYSTEMS.items()}
 PLATFORMS_ORDERED = [plat for d in SYSTEMS.values() for plat in d["platforms"]]
 
+PS2_ID_PATTERN = re.compile(
+    r"(?:SLES|SLPM|SLUS|SLPS|SCED|SCES|SCUS|SLKA|SCPS|SLED|SCKA|SCAJ|PCPX|PAPX|PBPX|SCCS|TCES|SCPN|TLES|PSXC|SCPM)-\d{5}",
+    re.I
+)
+
 ARCADE_PLATFORMS = {
     "FBNeo - Arcade Games",
     "Handheld Electronic Game",
@@ -675,28 +779,12 @@ ARCADE_PLATFORMS = {
 # ====================== SHARED HELPERS ======================
 # ============================================================
 
-TAG_RE = re.compile(r"[\[\(].*?[\]\)]")
-
-def count_tags(name):
-    """Count bracketed / parenthesized tags."""
-    return len(TAG_RE.findall(name))
-
-def pick_best_rom_for_gameid(stems):
-    """
-    Given multiple ROM stems for the same GameID,
-    return the best one based on priority rules.
-    """
-    return sorted(
-        stems,
-        key=lambda s: (count_tags(s), len(s))
-    )[0]
-
 VALID_GAMEID_PATTERNS = [
     # Dolphin: no lowercase letters, max 7 chars
-    r"[A-Z0-9]{3,7}",
+    r"(?=[A-Z0-9]{6})(?=.*\d)[A-Z0-9]{6}",
 
     # PS2: strict disc IDs
-    r"(?:SLES|SLPM|SLUS|SLPS|SCED|SCES|SCUS|SLKA|SCPS|SLED|SCKA|SCAJ|PCPX|PAPX|PBPX|SCCS|TCES|SCPN|TLES|PSXC|SCPM)[_\-\.]?\d{3}[_\-\.]?\d{2}",
+    r"(?:SLES|SLPM|SLUS|SLPS|SCED|SCES|SCUS|SLKA|SCPS|SLED|SCKA|SCAJ|PCPX|PAPX|PBPX|SCCS|TCES|SCPN|TLES|PSXC|SCPM)-\d{5}",
 ]
 
 def is_valid_gameid(gameid):
@@ -704,6 +792,55 @@ def is_valid_gameid(gameid):
         if re.fullmatch(pat, gameid, re.I):
             return True
     return False
+
+def has_codeword(path):
+    name = os.path.basename(path).lower()
+    return any(cw in name for cw in CODEWORDS)
+
+def rom_sort_key(path):
+    name = os.path.basename(path)
+    return (
+        has_codeword(name),   # False preferred
+        len(name)             # shorter preferred
+    )
+
+def normalize_platform_for_identity(p):
+    if p in ("Nintendo - Game Boy", "Nintendo - Game Boy Color"):
+        return "Nintendo - Game Boy"
+    return p
+    
+_IMAGE_HASH_CACHE = {}
+
+def images_identical(src, dst):
+    if not os.path.isfile(dst):
+        return False
+
+    # Quick reject by size
+    if os.path.getsize(src) != os.path.getsize(dst):
+        return False
+
+    # --- Hash src ---
+    h1 = _IMAGE_HASH_CACHE.get(src)
+    if h1 is None:
+        h = hashlib.blake2b(digest_size=16)
+        with open(src, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                h.update(chunk)
+        h1 = h.digest()
+        _IMAGE_HASH_CACHE[src] = h1
+
+    # --- Hash dst ---
+    h2 = _IMAGE_HASH_CACHE.get(dst)
+    if h2 is None:
+        h = hashlib.blake2b(digest_size=16)
+        with open(dst, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                h.update(chunk)
+        h2 = h.digest()
+        _IMAGE_HASH_CACHE[dst] = h2
+
+    return h1 == h2
+
 
 def parse_seconds(value):
     # Parse playtime into seconds.
@@ -743,11 +880,13 @@ def make_launchbox_image_name(platform, rom_stem, ext):
     return None (never fall back to ROM filename).
     """
     def lb_normalize(name):
-        name = name.replace(":", "_").replace("'", "_")
+        name = name.replace(":", "_").replace("'", "_").replace("/", "_")
         name = re.sub(r'[<>"/\\|?*]', '', name)
         return name.strip()
 
-    xmlfile = LAUNCHBOX_PLATFORMS.get(platform)
+    lookup_platform = get_launchbox_lookup_key(platform)
+    xmlfile = LAUNCHBOX_PLATFORMS.get(lookup_platform)
+
     if not xmlfile:
         return None
 
@@ -778,6 +917,44 @@ def make_launchbox_image_name(platform, rom_stem, ext):
 
     return None
 
+def normalize_for_sync(name):
+
+    # Ignore -01, -02 etc at end
+    name = re.sub(r"-\d+$", "", name, flags=re.I)
+
+    # Ignore .standard at end
+    name = re.sub(r"\.standard$", "", name, flags=re.I)
+
+    # Treat these as same character
+    name = name.replace("/", "")
+    name = name.replace("'", "")
+    name = name.replace(":", "")
+    name = name.replace("&", "")
+    name = name.replace("_", "")
+
+    return name.lower()
+
+def get_launchbox_lookup_key(platform):
+    
+    plats = SETUP.get("PLATFORMS", {})
+    info = plats.get(platform)
+    if not info:
+        return platform
+
+    xml = info.get("xml")
+    if not xml:
+        return platform
+
+    # Strip .xml
+    base = os.path.splitext(xml)[0]
+
+    # Find the retroarch key that maps to this XML
+    for ra_key, xmlfile in LAUNCHBOX_PLATFORMS.items():
+        if xmlfile == xml:
+            return ra_key
+
+    # Fallback: return retroarch name if present
+    return info.get("retroarch", platform)
 
 # ============================================================
 # ================== RETROARCH THUMBNAILS ====================
@@ -802,26 +979,6 @@ def sanitize_rom_filename(name):
 
     return base + ext
 
-def normalize_filename_for_match(name, *, strip_ext=True):
-    if strip_ext:
-        name, _ = os.path.splitext(name)
-
-    # Normalize Unicode (decompose + remove diacritics) then apply existing rules.
-    name = unicodedata.normalize("NFKD", name)
-    name = "".join(ch for ch in name if not unicodedata.combining(ch))
-
-    # Strip bracketed tags
-    name = re.sub(r"[\[\(].*?[\]\)]", "", name)
-
-    # RetroArch safety
-    name = name.replace("&", "_")
-
-    # Keep only ASCII alphanumerics
-    name = re.sub(r"[^a-zA-Z0-9]", "", name)
-
-    return name.lower()
-
-
 def filenames_equivalent(a, b, *, strip_ext=True):
     if strip_ext:
         a0, _ = os.path.splitext(a)
@@ -829,14 +986,8 @@ def filenames_equivalent(a, b, *, strip_ext=True):
     else:
         a0, b0 = a, b
 
-    # 1) exact match first
-    if a0 == b0:
-        return True
-
-    # 2) normalized fallback
-    return normalize_filename_for_match(a0, strip_ext=False) == \
-           normalize_filename_for_match(b0, strip_ext=False)
-
+    # Apply sync normalization first
+    return normalize_for_sync(a0) == normalize_for_sync(b0)
 
 def expand_multidisc_renames(rom_dir, old_file, new_file):
     """
@@ -981,7 +1132,6 @@ def replace_lines_in_file(path, replacements):
 
     with open(path, "w", encoding="utf-8") as f:
         f.write(new_text)
-
 
 # ============================================================
 # ===================== PLAYTIME LOADERS =====================
@@ -1605,8 +1755,177 @@ def write_pcsx2_time(gameid, seconds, lastplayed):
         f.write(newline.join(out) + newline)
 
 # ============================================================
-# ================== SCREENSHOT SYNC ENGINE ==================
+# ============= CURATED PICTURES SHARED ENGINE ===============
 # ============================================================
+
+_LB_TITLE_CACHE = None
+
+def _resolve_filename_match(root_dir, platform, rom_stem, image_exts=None, single_ext=None, strip_suffix=True):
+    # Shared filename resolver: title first, ROM fallback
+    if not root_dir or not os.path.isdir(root_dir):
+        return None
+
+    lookup_platform = get_launchbox_lookup_key(platform)
+    lb_title = _LB_TITLE_CACHE.get((lookup_platform, rom_stem))
+
+    # Title match
+    if lb_title:
+        title_norm = normalize_for_sync(lb_title)
+        for fname in os.listdir(root_dir):
+            base, ext = os.path.splitext(fname)
+            if image_exts:
+                if ext.lower() not in image_exts:
+                    continue
+            elif single_ext:
+                if ext.lower() != single_ext.lower():
+                    continue
+            compare_base = re.sub(r"-\d+$", "", base) if strip_suffix else base
+            if normalize_for_sync(compare_base) == title_norm:
+                return fname
+
+    # ROM fallback
+    stem_norm = normalize_for_sync(rom_stem)
+    for fname in os.listdir(root_dir):
+        base, ext = os.path.splitext(fname)
+        if image_exts:
+            if ext.lower() not in image_exts:
+                continue
+        elif single_ext:
+            if ext.lower() != single_ext.lower():
+                continue
+        compare_base = re.sub(r"-\d+$", "", base) if strip_suffix else base
+        if normalize_for_sync(compare_base) == stem_norm:
+            return fname
+
+    return None
+
+def resolve_curated_source(src_key, platform, rom_stem, image_exts, get_lb_dir, get_ra_dir):
+    global _LB_TITLE_CACHE
+
+    # Validate source key
+    if src_key not in ("LB", "RA"):
+        return None
+
+    # Build LB title cache once
+    if _LB_TITLE_CACHE is None:
+        _LB_TITLE_CACHE = {}
+        for plat, xmlfile in LAUNCHBOX_PLATFORMS.items():
+            path = os.path.join(LAUNCHBOX_DATA_DIR, xmlfile)
+            if not os.path.exists(path):
+                continue
+            try:
+                tree = ET.parse(path)
+                root = tree.getroot()
+            except:
+                continue
+            for g in root.findall("Game"):
+                app = g.findtext("ApplicationPath", "").strip()
+                title = g.findtext("Title", "").strip()
+                if not app or not title:
+                    continue
+                stem = os.path.splitext(os.path.basename(app))[0]
+                _LB_TITLE_CACHE[(plat, stem)] = title
+
+    # Resolve source directory
+    src_dir = get_lb_dir(platform) if src_key == "LB" else get_ra_dir(platform)
+
+    # Resolve matching filename
+    fname = _resolve_filename_match(src_dir, platform, rom_stem, image_exts=image_exts)
+
+    return os.path.join(src_dir, fname) if fname else None
+
+def resolve_curated_target(target_key, platform, rom_stem, ext, get_lb_dir, get_ra_dir, block_ra_core_creation=True):
+
+    # LaunchBox target
+    if target_key == "LB":
+        tgt_root = get_lb_dir(platform)
+        name = make_launchbox_image_name(platform, rom_stem, ext)
+        return (tgt_root, name) if tgt_root and name else (None, None)
+
+    # RetroArch target
+    if target_key == "RA":
+        tgt_root = get_ra_dir(platform)
+
+        # Core-platform safety rule
+        if block_ra_core_creation:
+            core_platforms = SYSTEMS["PS2"]["platforms"] + SYSTEMS["GC"]["platforms"] + SYSTEMS["WII"]["platforms"]
+            if platform in core_platforms:
+                if not tgt_root or not os.path.isdir(tgt_root):
+                    return None, None
+
+        # Resolve matching filename
+        name = _resolve_filename_match(tgt_root, platform, rom_stem, single_ext=ext, strip_suffix=False)
+
+        # Fallback to ROM filename
+        if not name:
+            name = sanitize_rom_filename(rom_stem) + ext
+
+        return (tgt_root, name) if tgt_root and name else (None, None)
+
+    return None, None
+
+# ============================================================
+# ================ SCREENSHOT SYNC ENGINE ====================
+# ============================================================
+
+# ---------- Processed-screens registry helpers ----------
+PROC_FILE = os.path.join(os.path.dirname(__file__), "processedscreens.txt")
+
+def _normalize_ts_for_compare(ts):
+    # Normalize '260205090538' -> '20260205090538' (2-digit year -> 4-digit)
+    if not ts:
+        return ""
+    s = str(ts)
+    if len(s) == 12 and s.isdigit():
+        # assume 2-digit year -> 20YY
+        return "20" + s
+    # if already full (14-digit), return as-is
+    return s
+
+def load_processed_registry():
+    """Return dict mapping (platform, frontend, ident) -> ts (raw string)."""
+    m = {}
+    if not os.path.isfile(PROC_FILE):
+        return m
+    with open(PROC_FILE, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.rstrip("\n")
+            if not line or "|" not in line:
+                continue
+            try:
+                plat, frontend, ident, ts = [x.strip() for x in line.split("|", 3)]
+            except:
+                # preserve malformed but skip
+                continue
+            m[(plat, frontend, ident)] = ts
+    return m
+
+def save_processed_registry(reg):
+    """reg: dict (platform, frontend, ident) -> ts"""
+    # write deterministic ordering for stability
+    lines = []
+    for (plat, frontend, ident), ts in sorted(reg.items()):
+        lines.append(f"{plat}|{frontend}|{ident}|{ts}")
+    with open(PROC_FILE, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + ("\n" if lines else ""))
+
+def should_process(reg, platform, frontend, ident, candidate_ts):
+    """Return True if we should process (no entry or candidate is newer)."""
+    key = (platform, frontend, ident)
+    old_ts = reg.get(key)
+    if not old_ts:
+        return True
+    a = _normalize_ts_for_compare(old_ts)
+    b = _normalize_ts_for_compare(candidate_ts)
+    # compare lexicographically after normalizing
+    try:
+        return b > a
+    except:
+        # fallback - string compare
+        return str(candidate_ts) > str(old_ts)
+
+def update_processed_entry(reg, platform, frontend, ident, candidate_ts):
+    reg[(platform, frontend, ident)] = candidate_ts
 
 _COMPRESSED_IMAGE_CACHE = {}
 def compress_and_copy_image(src, dst):
@@ -1701,6 +2020,11 @@ def compress_and_copy_image(src, dst):
     _COMPRESSED_IMAGE_CACHE[src] = final
     return True
 
+SYNC_BOTH_ACTIVE = False
+
+def sync_screenshots(mode, src_key):
+    global SYNC_BOTH_ACTIVE
+    RAW_SOURCES = {"RA_RAW", "DOLPHIN", "PCSX2", "ALL"}
 
     rows = load_local()
     if not rows:
@@ -1710,41 +2034,50 @@ def compress_and_copy_image(src, dst):
     image_exts = (".png", ".jpg", ".jpeg")
     ps2_id_pat = re.compile(VALID_GAMEID_PATTERNS[1], re.I)
 
-    def normalize_id(s):
-        return re.sub(r"[_\-.]", "", s.upper())
-
     def strip_lb_suffix(name):
         return re.sub(r"-\d+$", "", name)
 
+    def normalize_id(s):
+        return re.sub(r"[_\-.]", "", s.upper())
+
+    def files_identical(a, b):
+        if not os.path.isfile(a) or not os.path.isfile(b):
+            return False
+        if os.path.getsize(a) != os.path.getsize(b):
+            return False
+
+        h1 = hashlib.blake2b(digest_size=16)
+        h2 = hashlib.blake2b(digest_size=16)
+
+        with open(a, "rb") as fa, open(b, "rb") as fb:
+            for chunk in iter(lambda: fa.read(65536), b""):
+                h1.update(chunk)
+            for chunk in iter(lambda: fb.read(65536), b""):
+                h2.update(chunk)
+
+        return h1.digest() == h2.digest()
+
     # ==================================================
-    # LOAD LAUNCHBOX TITLES (ROM stem → Title)
+    # Processed registry (only used for RAW sources)
     # ==================================================
-    lb_title_map = {}
-
-    if src_key in ("RA", "LB"):
-        for plat, xmlfile in LAUNCHBOX_PLATFORMS.items():
-            path = os.path.join(LAUNCHBOX_DATA_DIR, xmlfile)
-            if not os.path.exists(path):
-                continue
-
-            try:
-                tree = ET.parse(path)
-                root = tree.getroot()
-            except:
-                continue
-
-            for g in root.findall("Game"):
-                app = g.findtext("ApplicationPath", "").strip()
-                title = g.findtext("Title", "").strip()
-
-                if not app or not title:
-                    continue
-
-                stem = os.path.splitext(os.path.basename(app))[0]
-                lb_title_map[stem] = title
+    processed_registry = {}
+    if src_key in RAW_SOURCES:
+        processed_registry = load_processed_registry()
 
     copied_paths = []
 
+    # Helper: core platforms (PS2 / GC / WII)
+    core_platforms = []
+    core_platforms += SYSTEMS.get("PS2", {}).get("platforms", [])
+    core_platforms += SYSTEMS.get("GC", {}).get("platforms", [])
+    core_platforms += SYSTEMS.get("WII", {}).get("platforms", [])
+
+    # Flag: user requested both frontends (not mode==1 or 2)
+    is_target_both = SYNC_BOTH_ACTIVE
+
+    # ==================================================
+    # MAIN LOOP
+    # ==================================================
     for line in rows:
         try:
             platform, _, gameid, file = [x.strip() for x in line.split("|")]
@@ -1752,395 +2085,261 @@ def compress_and_copy_image(src, dst):
             continue
 
         rom_stem = os.path.splitext(os.path.basename(file))[0]
-        lb_title = lb_title_map.get(rom_stem)
         src = None
 
         # --------------------------------------------------
-        # LaunchBox gameplay images → RetroArch
+        # CURATED SOURCES (LaunchBox / RetroArch gameplay pics)
         # --------------------------------------------------
-        if src_key == "LB":
-            root = os.path.join(LAUNCHBOX_IMG_DIR, platform, LAUNCHBOX_SCREEN_SUBDIR)
-            if os.path.isdir(root):
+        if src_key in ("LB", "RA"):
 
-                # 1) ROM filename priority
-                for f in os.listdir(root):
-                    b, e = os.path.splitext(f)
-                    if e.lower() in image_exts and filenames_equivalent(
-                        strip_lb_suffix(b), rom_stem, strip_ext=False
-                    ):
-                        src = os.path.join(root, f)
-                        break
+            src = resolve_curated_source(
+                src_key=src_key,
+                platform=platform,
+                rom_stem=rom_stem,
+                image_exts=image_exts,
+                get_lb_dir=get_launchbox_screen_dir,
+                get_ra_dir=get_retroarch_screen_dir,
+            )
 
-                # 2) LaunchBox XML title fallback
-                if not src and lb_title:
-                    for f in os.listdir(root):
-                        b, e = os.path.splitext(f)
-                        if e.lower() in image_exts and filenames_equivalent(
-                            strip_lb_suffix(b), lb_title, strip_ext=False
-                        ):
-                            src = os.path.join(root, f)
+        # --------------------------------------------------
+        # RAW SOURCES (RA_RAW / DOLPHIN / PCSX2 / ALL)
+        # --------------------------------------------------
+        else:
+            best = None
+
+            # RetroArch raw screenshots (per-platform directories)
+            if src_key in ("RA_RAW", "ALL"):
+                if RETROARCH_SCREEN_DIR:
+                    rom_dir = get_games_dir(platform)
+                    rom_full_path = None
+
+                    for r, _, files in os.walk(rom_dir):
+                        if file in files:
+                            rom_full_path = os.path.join(r, file)
                             break
 
-        # --------------------------------------------------
-        # RetroArch gameplay thumbnails → LaunchBox
-        # --------------------------------------------------
-        if not src and src_key == "RA":
-            root = os.path.join(RETROARCH_IMG_DIR, platform, RETROARCH_SCREEN_SUBDIR)
-            if os.path.isdir(root):
+                    if not rom_full_path:
+                        continue  # ROM not found, skip safely
 
-                # 1) LaunchBox XML title priority
-                if lb_title:
-                    for f in os.listdir(root):
+                    rom_parent = os.path.basename(os.path.dirname(rom_full_path))
+
+                    root = os.path.join(RETROARCH_SCREEN_DIR, rom_parent)
+
+                    if os.path.isdir(root):
+                        for r, _, files in os.walk(root):
+                            for f in files:
+                                b, e = os.path.splitext(f)
+                                if e.lower() not in image_exts:
+                                    continue
+                                # expect form: <romstem>-XXXXXX-XXXXXX
+                                if re.sub(r"-\d{6}-\d{6}$", "", b) != rom_stem:
+                                    continue
+                                ts = re.search(r"-(\d{6})-(\d{6})$", b)
+                                if ts:
+                                    stamp = ts.group(1) + ts.group(2)   # 12-digit-ish
+                                    if not best or stamp > best[0]:
+                                        best = (stamp, os.path.join(r, f))
+
+            # Dolphin screenshots (game-specific subfolders)
+            if not best and src_key in ("DOLPHIN", "ALL"):
+                if DOLPHIN_SCREEN_DIR and gameid:
+                    root = os.path.join(DOLPHIN_SCREEN_DIR, gameid)
+                    if os.path.isdir(root):
+                        for f in os.listdir(root):
+                            base, e = os.path.splitext(f)
+                            if e.lower() not in image_exts:
+                                continue
+                            path = os.path.join(root, f)
+                            mtime = os.path.getmtime(path)
+                            if not best or mtime > best[0]:
+                                best = (mtime, path)
+
+            # PCSX2 screenshots (flat directory, filenames contain PS2 id)
+            if not best and src_key in ("PCSX2", "ALL"):
+                if PCSX2_SCREEN_DIR and os.path.isdir(PCSX2_SCREEN_DIR):
+                    for f in os.listdir(PCSX2_SCREEN_DIR):
                         b, e = os.path.splitext(f)
-                        if e.lower() in image_exts and filenames_equivalent(
-                            strip_lb_suffix(b), lb_title, strip_ext=False
-                        ):
-                            src = os.path.join(root, f)
-                            break
+                        if e.lower() not in image_exts:
+                            continue
+                        m = ps2_id_pat.search(f)
+                        if m and normalize_id(m.group(0)) == normalize_id(gameid):
+                            path = os.path.join(PCSX2_SCREEN_DIR, f)
+                            mtime = os.path.getmtime(path)
+                            if not best or mtime > best[0]:
+                                best = (mtime, path)
 
-                # 2) ROM filename fallback
-                if not src:
-                    for f in os.listdir(root):
-                        b, e = os.path.splitext(f)
-                        if e.lower() in image_exts and filenames_equivalent(
-                            b, sanitize_rom_filename(rom_stem), strip_ext=False
-                        ):
-                            src = os.path.join(root, f)
-                            break
-
-        # --------------------------------------------------
-        # RetroArch raw screenshots
-        # --------------------------------------------------
-        if not src and src_key in ("RA_RAW", "ALL"):
-            root = os.path.join(RETROARCH_SCREEN_DIR, platform)
-            if os.path.isdir(root):
-                for r, _, files in os.walk(root):
-                    for f in files:
-                        b, e = os.path.splitext(f)
-                        if e.lower() in image_exts and re.sub(
-                            r"-\d{6}-\d{6}$", "", b
-                        ) == rom_stem:
-                            src = os.path.join(r, f)
-                            break
-                    if src:
-                        break
-
-        # --------------------------------------------------
-        # Dolphin screenshots
-        # --------------------------------------------------
-        if not src and src_key in ("DOLPHIN", "ALL"):
-            root = os.path.join(DOLPHIN_SCREEN_DIR, gameid)
-            if os.path.isdir(root):
-                for f in os.listdir(root):
-                    if f.lower().endswith(image_exts):
-                        src = os.path.join(root, f)
-                        break
-
-        # --------------------------------------------------
-        # PCSX2 screenshots
-        # --------------------------------------------------
-        if not src and src_key in ("PCSX2", "ALL"):
-            if os.path.isdir(PCSX2_SCREEN_DIR):
-                for f in os.listdir(PCSX2_SCREEN_DIR):
-                    if not f.lower().endswith(image_exts):
-                        continue
-                    m = ps2_id_pat.search(f)
-                    if m and normalize_id(m.group(0)) == normalize_id(gameid):
-                        src = os.path.join(PCSX2_SCREEN_DIR, f)
-                        break
+            if best:
+                src = best[1]
 
         if not src:
             continue
 
         ext = os.path.splitext(src)[1]
-
-        temp_src = None
-        if mode == 3 and src_key in ("RA_RAW", "DOLPHIN", "PCSX2", "ALL"):
-            temp_src = os.path.join(
-                os.path.dirname(__file__),
-                f"__tmp_{os.getpid()}_{rom_stem}.png"
-            )
-            compress_and_copy_image(src, temp_src)
-
         targets = [mode] if mode in (1, 2) else [1, 2]
+        
+        # Determine allowed targets for this game
+        allowed_targets = []
 
         for t in targets:
-            if t == 1:
-                tgt_root = os.path.join(
-                    LAUNCHBOX_IMG_DIR, platform, LAUNCHBOX_SCREEN_SUBDIR
+            if t == 2:  # RetroArch candidate
+                # If it's a core platform (PS2/GC/WII) we may need to block RA under special conditions.
+                if platform in core_platforms:
+                    # Special-case rule A: src == ALL and user requested BOTH -> block RA unless the exact RA platform folder already exists
+                    if src_key == "ALL" and is_target_both:
+                        ra_root = None
+                        try:
+                            ra_root = get_retroarch_screen_dir(platform)
+                        except Exception:
+                            ra_root = None
+                        if not ra_root or not os.path.isdir(ra_root):
+                            # RetroArch not allowed for this core platform in this mode
+                            continue
+
+                    # Special-case rule B: src == LB (LaunchBox -> RetroArch) -> same block unless folder exists
+                    if src_key == "LB":
+                        ra_root = None
+                        try:
+                            ra_root = get_retroarch_screen_dir(platform)
+                        except Exception:
+                            ra_root = None
+                        if not ra_root or not os.path.isdir(ra_root):
+                            continue
+            # If we reach here, this target is allowed
+            allowed_targets.append(t)
+
+        # --------------------------------------------------
+        # COPY TO TARGET(S)
+        # --------------------------------------------------
+        for t in allowed_targets:
+
+            # ===============================
+            # CURATED SOURCES (LB / RA)
+            # ===============================
+            if src_key in ("LB", "RA"):
+
+                target_key = "LB" if t == 1 else "RA"
+
+                # For screenshots we block RA folder creation only when:
+                #  - source is LaunchBox -> target RetroArch (LB -> RA)
+                #  - OR source == ALL and user requested BOTH (RAW ingestion special case)
+                block_core = (src_key == "LB") or (src_key == "ALL" and is_target_both)
+
+                tgt_root, name = resolve_curated_target(
+                    target_key=target_key,
+                    platform=platform,
+                    rom_stem=rom_stem,
+                    ext=ext,
+                    get_lb_dir=get_launchbox_screen_dir,
+                    get_ra_dir=get_retroarch_screen_dir,
+                    block_ra_core_creation=block_core,
                 )
-                name = make_launchbox_image_name(platform, rom_stem, ext)
-                if not name:
-                    continue
-                os.makedirs(tgt_root, exist_ok=True)
 
-            else:
-                tgt_platform_root = os.path.join(RETROARCH_IMG_DIR, platform)
+                frontend_name = "LaunchBox" if t == 1 else "RetroArch"
 
-                if not os.path.isdir(tgt_platform_root) and src_key == "ALL" and SYNC_BOTH_ACTIVE:
+                if not tgt_root or not name:
                     continue
 
-                tgt_root = os.path.join(
-                    tgt_platform_root, RETROARCH_SCREEN_SUBDIR
-                )
+                # safe to create/ensure target folder for allowed cases
                 os.makedirs(tgt_root, exist_ok=True)
-                name = sanitize_rom_filename(rom_stem) + ext
+                dst = os.path.join(tgt_root, name)
 
-            dst = os.path.join(tgt_root, name)
+                # Lossless/curated copy — preserve exact file if identical
+                if os.path.exists(dst) and files_identical(src, dst):
+                    continue
 
-            if temp_src:
-                shutil.copy2(temp_src, dst)
-            elif src_key in ("RA_RAW", "DOLPHIN", "PCSX2", "ALL"):
-                compress_and_copy_image(src, dst)
-            else:
                 shutil.copy2(src, dst)
+                copied_paths.append(dst)
+                continue  # next target
 
-            copied_paths.append(dst)
+            # ===============================
+            # RAW SOURCES (one-way ingestion with compression & registry)
+            # ===============================
+            else:
 
-        if temp_src and os.path.exists(temp_src):
-            os.remove(temp_src)
+                if t == 1:
+                    tgt_root = get_launchbox_screen_dir(platform)
+                    name = make_launchbox_image_name(platform, rom_stem, ext)
+                    frontend_name = "LaunchBox"
+                else:
+                    tgt_root = get_retroarch_screen_dir(platform)
+                    name = sanitize_rom_filename(rom_stem) + ext
+                    frontend_name = "RetroArch"
 
-    if src_key in ("RA_RAW", "DOLPHIN", "PCSX2", "ALL"):
-        for p in copied_paths:
-            print(p)
-
-    if mode == 1:
-        print(f"Copied {len(copied_paths)} screenshots to LaunchBox gameplay picture folder.")
-    elif mode == 2:
-        print(f"Copied {len(copied_paths)} screenshots to RetroArch gameplay picture folder.")
-
-def sync_screenshots(mode, src_key):
-    rows = load_local()
-    if not rows:
-        print("local_games.txt not found or empty.")
-        return
-
-    image_exts = (".png", ".jpg", ".jpeg")
-    ps2_id_pat = re.compile(VALID_GAMEID_PATTERNS[1], re.I)
-
-    proc_file = os.path.join(os.path.dirname(__file__), "processedscreens.txt")
-
-    # --------------------------------------------------
-    # Load processed registry:
-    # (platform, target, identity) -> timestamp
-    # --------------------------------------------------
-    processed = {}
-    if os.path.isfile(proc_file):
-        with open(proc_file, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
+                if not name or not tgt_root:
                     continue
+
+                # Extra guard: same RA core-folder rule as earlier
+                if frontend_name == "RetroArch" and platform in core_platforms:
+                    if (src_key == "ALL" and is_target_both) or (src_key == "LB"):
+                        if not os.path.isdir(tgt_root):
+                            # skip RetroArch transfer for this platform/folder
+                            continue
+
+                os.makedirs(tgt_root, exist_ok=True)
+                dst = os.path.join(tgt_root, name)
+
+                # Determine candidate timestamp/identity for registry
+                ident = os.path.splitext(os.path.basename(src))[0]
+                candidate_ts = ""
+
+                # RetroArch RAW uses <rom>-XXXXXX-XXXXXX pattern
+                m = re.search(r"-(\d{6})-(\d{6})$", ident)
+                if m:
+                    candidate_ts = m.group(1) + m.group(2)
+                else:
+                    # Dolphin ISO-like "YYYY-MM-DD_HH-MM-SS" at end
+                    m2 = re.search(r"(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})$", ident)
+                    if m2:
+                        candidate_ts = m2.group(1).replace("-", "").replace("_", "")
+                    else:
+                        m3 = re.search(r"(\d{12,14})$", ident)
+                        if m3:
+                            candidate_ts = m3.group(1)
+                        else:
+                            # fallback: file mtime
+                            try:
+                                candidate_ts = time.strftime(
+                                    "%Y%m%d%H%M%S", time.localtime(os.path.getmtime(src))
+                                )
+                            except:
+                                candidate_ts = ""
+
                 try:
-                    plat, target, ident, ts = line.split("|", 3)
-                    processed[(plat, target, ident)] = ts
-                except:
+                    to_process = should_process(
+                        processed_registry, platform, frontend_name, ident, candidate_ts
+                    )
+                except Exception:
+                    to_process = True
+
+                if not to_process:
                     continue
 
-    def save_processed():
-        with open(proc_file, "w", encoding="utf-8") as f:
-            for (plat, target, ident), ts in sorted(processed.items()):
-                f.write(f"{plat}|{target}|{ident}|{ts}\n")
+                try:
+                    success = compress_and_copy_image(src, dst)
+                except Exception:
+                    success = False
 
-    def extract_ts(name):
-        m = re.search(r"-(\d{6})-(\d{6})$", os.path.splitext(name)[0])
-        if not m:
-            return None
-        return m.group(1) + m.group(2)
+                if success:
+                    copied_paths.append(dst)
+                    update_processed_entry(
+                        processed_registry, platform, frontend_name, ident, candidate_ts
+                    )
 
-    def extract_identity(name):
-        base = os.path.splitext(name)[0]
-
-        # RetroArch raw screenshots
-        if re.search(r"-\d{6}-\d{6}$", base):
-            return re.sub(r"-\d{6}-\d{6}$", "", base)
-
-        # Dolphin / PCSX2 (strip trailing timestamp block)
-        return re.sub(r"[_-]\d{8}[_-]\d{6}$", "", base)
-
-    def normalize_id(s):
-        return re.sub(r"[_\-.]", "", s.upper())
-
-    def strip_lb_suffix(name):
-        return re.sub(r"-\d+$", "", name)
-
-    # ==================================================
-    # LOAD LAUNCHBOX TITLES (ROM stem → Title)
-    # ==================================================
-    lb_title_map = {}
-
-    if src_key in ("RA", "LB"):
-        for plat, xmlfile in LAUNCHBOX_PLATFORMS.items():
-            path = os.path.join(LAUNCHBOX_DATA_DIR, xmlfile)
-            if not os.path.exists(path):
-                continue
-            try:
-                tree = ET.parse(path)
-                root = tree.getroot()
-            except:
-                continue
-
-            for g in root.findall("Game"):
-                app = g.findtext("ApplicationPath", "").strip()
-                title = g.findtext("Title", "").strip()
-                if not app or not title:
-                    continue
-                stem = os.path.splitext(os.path.basename(app))[0]
-                lb_title_map[stem] = title
-
-    copied_paths = []
-
-    for line in rows:
+    # persist processed registry if we used it
+    if src_key in RAW_SOURCES:
         try:
-            platform, _, gameid, file = [x.strip() for x in line.split("|")]
-        except:
-            continue
+            save_processed_registry(processed_registry)
+        except Exception:
+            pass
 
-        rom_stem = os.path.splitext(os.path.basename(file))[0]
-        lb_title = lb_title_map.get(rom_stem)
+    for p in copied_paths:
+        print(p)
 
-        src = None
-        src_name = None
-
-        # --------------------------------------------------
-        # RetroArch raw screenshots
-        # --------------------------------------------------
-        if src_key in ("RA_RAW", "ALL"):
-            root = os.path.join(RETROARCH_SCREEN_DIR, platform)
-            if os.path.isdir(root):
-                best = None
-                for r, _, files in os.walk(root):
-                    for f in files:
-                        b, e = os.path.splitext(f)
-                        if e.lower() not in image_exts:
-                            continue
-                        if re.sub(r"-\d{6}-\d{6}$", "", b) != rom_stem:
-                            continue
-                        ts = extract_ts(f)
-                        if not ts:
-                            continue
-                        if not best or ts > best[0]:
-                            best = (ts, os.path.join(r, f), f)
-                if best:
-                    src = best[1]
-                    src_name = best[2]
-
-        # --------------------------------------------------
-        # Dolphin screenshots
-        # --------------------------------------------------
-        if not src and src_key in ("DOLPHIN", "ALL"):
-            root = os.path.join(DOLPHIN_SCREEN_DIR, gameid)
-            if os.path.isdir(root):
-                best = None
-                for f in os.listdir(root):
-                    if not f.lower().endswith(image_exts):
-                        continue
-                    ts = extract_ts(f)
-                    if not ts:
-                        continue
-                    if not best or ts > best[0]:
-                        best = (ts, os.path.join(root, f), f)
-                if best:
-                    src = best[1]
-                    src_name = best[2]
-
-        # --------------------------------------------------
-        # PCSX2 screenshots
-        # --------------------------------------------------
-        if not src and src_key in ("PCSX2", "ALL"):
-            if os.path.isdir(PCSX2_SCREEN_DIR):
-                best = None
-                for f in os.listdir(PCSX2_SCREEN_DIR):
-                    if not f.lower().endswith(image_exts):
-                        continue
-                    m = ps2_id_pat.search(f)
-                    if not m or normalize_id(m.group(0)) != normalize_id(gameid):
-                        continue
-                    ts = extract_ts(f)
-                    if not ts:
-                        continue
-                    if not best or ts > best[0]:
-                        best = (ts, os.path.join(PCSX2_SCREEN_DIR, f), f)
-                if best:
-                    src = best[1]
-                    src_name = best[2]
-
-        if not src or not src_name:
-            continue
-
-        identity = extract_identity(src_name)
-        ts = extract_ts(src_name)
-        if not identity or not ts:
-            continue
-
-        ext = os.path.splitext(src)[1]
-
-        targets = [mode] if mode in (1, 2) else [1, 2]
-
-        for t in targets:
-            if t == 1:
-                target_name = "LaunchBox"
-                tgt_root = os.path.join(
-                    LAUNCHBOX_IMG_DIR, platform, LAUNCHBOX_SCREEN_SUBDIR
-                )
-                name = make_launchbox_image_name(platform, rom_stem, ext)
-                if not name:
-                    continue
-            else:
-                target_name = "RetroArch"
-                tgt_root = os.path.join(
-                    RETROARCH_IMG_DIR, platform, RETROARCH_SCREEN_SUBDIR
-                )
-                name = sanitize_rom_filename(rom_stem) + ext
-
-            os.makedirs(tgt_root, exist_ok=True)
-
-            key = (platform, target_name, identity)
-            prev_ts = processed.get(key)
-
-            dst = os.path.join(tgt_root, name)
-
-            if prev_ts and ts <= prev_ts and os.path.exists(dst):
-                continue
-
-            if src_key in ("RA_RAW", "DOLPHIN", "PCSX2", "ALL"):
-                compress_and_copy_image(src, dst)
-            else:
-                shutil.copy2(src, dst)
-
-            copied_paths.append(dst)
-            processed[key] = ts
-
-    save_processed()
-
-    if src_key in ("RA_RAW", "DOLPHIN", "PCSX2", "ALL"):
-        for p in copied_paths:
-            print(p)
-
-    if mode == 1:
-        print(f"Copied {len(copied_paths)} screenshots to LaunchBox gameplay picture folder.")
-    elif mode == 2:
-        print(f"Copied {len(copied_paths)} screenshots to RetroArch gameplay picture folder.")
+    print(f"Copied {len(copied_paths)} screenshots.")
 
 # ============================================================
 # ===================== COVER ENGINE ========================
 # ============================================================
-
-# ROMs whose covers should NOT be renamed to GameID
-# Patterns are matched against ROM filename stem (no extension)
-COVER_GAMEID_EXCEPTIONS = [
-    r"^CodeBreaker v\d+",
-]
-
-def keep_rom_named_cover(stem):
-    """
-    Return True if this ROM's cover should keep the ROM-based
-    filename instead of being renamed to GameID.
-    """
-    for pat in COVER_GAMEID_EXCEPTIONS:
-        if re.match(pat, stem, re.I):
-            return True
-    return False
 
 def sync_covers(src_name, src_root, tgt_name, tgt_root):
     rows = load_playtime_export()
@@ -2158,131 +2357,169 @@ def sync_covers(src_name, src_root, tgt_name, tgt_root):
         except:
             continue
 
-    if tgt_name == "PCSX2":
-        allowed_platforms &= set(SYSTEMS["PS2"]["platforms"])
-    elif tgt_name == "Dolphin":
-        allowed_platforms &= set(
-            SYSTEMS["GC"]["platforms"] + SYSTEMS["WII"]["platforms"]
-        )
-
     def strip_lb_suffix(name):
         return re.sub(r"-\d+$", "", name)
 
     def norm(s):
         return re.sub(r"[^A-Z0-9]", "", s.upper())
 
-    # --------------------------------------------------
-    # Load LaunchBox ROM stem → Title map
-    # --------------------------------------------------
-    lb_title_map = {}
+    grouped = defaultdict(list)
 
-    if tgt_name == "LaunchBox":
-        for platform, xmlfile in LAUNCHBOX_PLATFORMS.items():
-            path = os.path.join(LAUNCHBOX_DATA_DIR, xmlfile)
-            if not os.path.exists(path):
-                continue
-            try:
-                tree = ET.parse(path)
-                root = tree.getroot()
-            except:
-                continue
-
-            for g in root.findall("Game"):
-                app = g.findtext("ApplicationPath", "").strip()
-                title = g.findtext("Title", "").strip()
-                if not app or not title:
-                    continue
-                stem = os.path.splitext(os.path.basename(app))[0]
-                lb_title_map[(platform, stem)] = title
-
-    entries = []
     for line in rows:
         try:
             platform, _, gameid, _, _, file = [x.strip() for x in line.split("|")]
-            if platform in allowed_platforms:
-                entries.append((platform, gameid, file))
+            if platform not in allowed_platforms:
+                continue
+
+            rom_stem = os.path.splitext(os.path.basename(file))[0]
+
+            if (
+                platform == "Sony - PlayStation 2"
+                or platform == "Nintendo - GameCube"
+                or platform == "Nintendo - Wii"
+            ) and is_valid_gameid(gameid):
+                key = (platform, gameid)
+            else:
+                key = (platform, rom_stem)
+
+            grouped[key].append(file)   # ← YOU MISSED THIS
+
         except:
             continue
 
+    skipped_identical = 0
     copied = 0
+    copied_paths = []
     image_exts = (".png", ".jpg", ".jpeg", ".webp")
 
-    for platform, gameid, file in entries:
+    for (platform, gameid), files in grouped.items():
+        
+        # Choose canonical ROM
+        file = sorted(files, key=rom_sort_key)[0]
         rom_stem = os.path.splitext(os.path.basename(file))[0]
         src = None
 
         # --------------------------------------------------
-        # Resolve source directory
+        # Enforce target platform compatibility
+        # --------------------------------------------------
+        if tgt_name == "Dolphin":
+            if platform not in SYSTEMS["GC"]["platforms"] + SYSTEMS["WII"]["platforms"]:
+                continue
+
+        elif tgt_name == "PCSX2":
+            if platform not in SYSTEMS["PS2"]["platforms"]:
+                continue
+
+        # --------------------------------------------------
+        # Resolve source directory (MATCH MENU)
         # --------------------------------------------------
         if src_name == "LaunchBox":
-            src_dir = os.path.join(src_root, platform, LAUNCHBOX_COVER_SUBDIR)
+            src_dir = get_launchbox_cover_dir(platform)
+
         elif src_name == "RetroArch":
-            src_dir = os.path.join(src_root, platform, RETROARCH_COVER_SUBDIR)
+            src_dir = get_retroarch_cover_dir(platform)
+
+        elif src_name == "Dolphin":
+            src_dir = DOLPHIN_COVER_DIR
+
+        elif src_name == "PCSX2":
+            src_dir = PCSX2_COVER_DIR
+
         else:
-            src_dir = src_root
+            continue
+
+        if not os.path.isdir(src_dir):
+            continue
+            
+        src = None
 
         # --------------------------------------------------
-        # Dolphin: flat directory, filenames are GameID.png
+        # Curated LB / RA resolution (shared helper)
         # --------------------------------------------------
-        if src_name == "Dolphin" and os.path.isdir(src_dir):
+        if src_name in ("LaunchBox", "RetroArch"):
+            src_key = "LB" if src_name == "LaunchBox" else "RA"
+
+            src = resolve_curated_source(
+                src_key=src_key,
+                platform=platform,
+                rom_stem=rom_stem,
+                image_exts=image_exts,
+                get_lb_dir=get_launchbox_cover_dir,
+                get_ra_dir=get_retroarch_cover_dir,
+            )
+
+        # --------------------------------------------------
+        # Dolphin / PCSX2: GameID filenames (UNCHANGED)
+        # --------------------------------------------------
+        elif src_name in ("Dolphin", "PCSX2") and gameid:
             gid = norm(gameid)
             for fname in os.listdir(src_dir):
                 base, ext = os.path.splitext(fname)
                 if ext.lower() in image_exts and norm(base) == gid:
                     src = os.path.join(src_dir, fname)
                     break
-
-        # --------------------------------------------------
-        # PCSX2: flat directory, filenames are GameID
-        # --------------------------------------------------
-        if not src and src_name == "PCSX2" and os.path.isdir(src_dir):
-            gid = norm(gameid)
-            for fname in os.listdir(src_dir):
-                base, ext = os.path.splitext(fname)
-                if ext.lower() in image_exts and norm(base) == gid:
-                    src = os.path.join(src_dir, fname)
-                    break
-
-        # --------------------------------------------------
-        # Title-based fallback (LB / RA sources only)
-        # --------------------------------------------------
-        if not src:
-            lb_title = lb_title_map.get((platform, rom_stem))
-            if lb_title and os.path.isdir(src_dir):
-                for fname in os.listdir(src_dir):
-                    base, ext = os.path.splitext(fname)
-                    if ext.lower() not in image_exts:
-                        continue
-                    if filenames_equivalent(strip_lb_suffix(base), lb_title, strip_ext=False):
-                        src = os.path.join(src_dir, fname)
-                        break
 
         if not src:
             continue
 
         ext = os.path.splitext(src)[1]
 
-        # --------------------------------------------------
-        # Target naming
-        # --------------------------------------------------
-        if tgt_name == "LaunchBox":
-            tgt_dir = os.path.join(tgt_root, platform, LAUNCHBOX_COVER_SUBDIR)
-            os.makedirs(tgt_dir, exist_ok=True)
-            dst_name = make_launchbox_image_name(platform, rom_stem, ext)
-            if not dst_name:
+        if tgt_name in ("LaunchBox", "RetroArch"):
+
+            target_key = "LB" if tgt_name == "LaunchBox" else "RA"
+
+            block_core = (
+                src_name == "LaunchBox"
+                and tgt_name == "RetroArch"
+            )
+
+            tgt_dir, dst_name = resolve_curated_target(
+                target_key=target_key,
+                platform=platform,
+                rom_stem=rom_stem,
+                ext=ext,
+                get_lb_dir=get_launchbox_cover_dir,
+                get_ra_dir=get_retroarch_cover_dir,
+                block_ra_core_creation=block_core,
+            )
+
+            if not tgt_dir or not dst_name:
                 continue
 
-        elif tgt_name == "RetroArch":
-            tgt_dir = os.path.join(tgt_root, platform, RETROARCH_COVER_SUBDIR)
             os.makedirs(tgt_dir, exist_ok=True)
-            dst_name = sanitize_rom_filename(rom_stem) + ext
 
-        else:
-            tgt_dir = tgt_root
-            dst_name = rom_stem + ext
+        elif tgt_name == "Dolphin":
+            tgt_dir = DOLPHIN_COVER_DIR
+            os.makedirs(tgt_dir, exist_ok=True)
 
-        shutil.copy2(src, os.path.join(tgt_dir, dst_name))
+            if gameid and re.fullmatch(VALID_GAMEID_PATTERNS[0], gameid, re.I):
+                dst_name = gameid + ext
+            else:
+                dst_name = sanitize_rom_filename(rom_stem) + ext
+
+        elif tgt_name == "PCSX2":
+            tgt_dir = PCSX2_COVER_DIR
+            os.makedirs(tgt_dir, exist_ok=True)
+
+            if gameid and re.fullmatch(VALID_GAMEID_PATTERNS[1], gameid, re.I):
+                dst_name = gameid + ext
+            else:
+                dst_name = sanitize_rom_filename(rom_stem) + ext
+
+        dst = os.path.join(tgt_dir, dst_name)
+
+        if os.path.exists(dst):
+            if images_identical(src, dst):
+                skipped_identical += 1
+                continue
+            # else: different image → overwrite
+
+        shutil.copy2(src, dst)
         copied += 1
+        copied_paths.append(dst)
+        
+    for p in copied_paths:
+        print(p)
 
     if tgt_name == "LaunchBox":
         print(f"Copied {copied} covers to LaunchBox cover art folder.")
@@ -2290,7 +2527,10 @@ def sync_covers(src_name, src_root, tgt_name, tgt_root):
         print(f"Copied {copied} covers to RetroArch cover art folder.")
     else:
         print(f"Copied {copied} covers.")
-       
+
+    if skipped_identical:
+        print(f"Skipped {skipped_identical} identical covers.")
+     
 # ============================================================
 # ===================== RENAME ENGINE ========================
 # ============================================================
@@ -2525,7 +2765,7 @@ def replace_stem_in_tree(root, oldStem, newStem, exts=None):
 # ===================== MODIFY PLANNER ======================
 # ============================================================
 
-def rename_platform_images(platform, old_file, new_file):
+def rename_platform_images(platform, rom_dir, old_file, new_file):
 
     oldStem, _ = os.path.splitext(old_file)
     newStem, _ = os.path.splitext(new_file)
@@ -2574,9 +2814,23 @@ def rename_platform_images(platform, old_file, new_file):
     if not RETROARCH_SCREEN_DIR:
         return
 
-    plat_root = os.path.join(RETROARCH_SCREEN_DIR, platform)
+    # Find actual ROM path to determine screenshot folder
+    rom_full_path = None
+    for r, _, files in os.walk(rom_dir):
+        if new_file in files or old_file in files:
+            rom_full_path = os.path.join(r, new_file if new_file in files else old_file)
+            break
+
+    if not rom_full_path:
+        return
+
+    rom_parent = os.path.basename(os.path.dirname(rom_full_path))
+
+    plat_root = os.path.join(RETROARCH_SCREEN_DIR, rom_parent)
+
     if not os.path.isdir(plat_root):
         return
+
 
     ts_re = re.compile(r"^(.*?)(-\d{6}-\d{6})$")
 
@@ -2604,7 +2858,6 @@ def rename_platform_images(platform, old_file, new_file):
 
             if not os.path.exists(dst):
                 os.rename(src, dst)
-
 
 def build_modify_plans(old_lines, new_lines, local_rows, play_rows):
     def parse(row):
@@ -2659,11 +2912,28 @@ def build_modify_plans(old_lines, new_lines, local_rows, play_rows):
                 + old + "\n" + new
             )
 
-        key = (op, ot, og, of)
-        if key not in local_map:
+        # find current row by identity only
+        identity_match = None
+        for (p, t, g, f), row in local_map.items():
+            if (
+                normalize_platform_for_identity(p),
+                t,
+                g
+            ) == (
+                normalize_platform_for_identity(op),
+                ot,
+                og
+            ):
+                identity_match = (p, t, g, f)
+                break
+
+
+        if not identity_match:
             raise RuntimeError(
-                "Original not found in local_games.txt:\n" + old
+                "Original identity not found in local_games.txt:\n" + old
             )
+
+        current_key = identity_match
 
         system = PLATFORM_TO_SYSTEM.get(op)
 
@@ -2683,14 +2953,14 @@ def build_modify_plans(old_lines, new_lines, local_rows, play_rows):
         # --------------------------------------------------
         # local_games.txt
         # --------------------------------------------------
-        replacements_local[local_map[key]] = (
+        replacements_local[local_map[current_key]] = (
             f"{op} | {ot} | {og} | {nf}"
         )
 
         # --------------------------------------------------
         # playtime_export.txt
         # --------------------------------------------------
-        old_play = play_map.get(key)
+        old_play = play_map.get(current_key)
         if old_play:
             if not npt and not nlp:
                 _, _, _, pt, lp, _ = parse(old_play)
@@ -2711,7 +2981,7 @@ def build_modify_plans(old_lines, new_lines, local_rows, play_rows):
         # Filename rename (non-MAME only)
         # --------------------------------------------------
         if of != nf:
-            rom_dir = os.path.join(GAMES_DIR, op)
+            rom_dir = get_games_dir(op)
             rename_jobs.extend(
                 expand_multidisc_renames(rom_dir, of, nf)
             )
@@ -2754,7 +3024,7 @@ def build_modify_plans(old_lines, new_lines, local_rows, play_rows):
             for l in proc_lines:
                 f.write(l + "\n")
 
-    return replacements_local, replacements_play, rename_jobs, time_jobs
+    return replacements_local, replacements_play, rename_jobs, time_jobs, []
 
 def run_modify_direct(old_lines, new_lines):
     local_rows = load_local()
@@ -2830,7 +3100,6 @@ def run_modify_direct(old_lines, new_lines):
             if system == "PS2":
                 write_pcsx2_time(gameid, seconds, lastplayed)
 
-
 # ============================================================
 # ===================== COMMAND ENGINE ======================
 # ============================================================
@@ -2850,38 +3119,37 @@ def cmd_rescan():
     cmd_export_playtime()
 
 # ---------- Paths check ----------
+
 def cmd_check_paths():
     print("\n=== System Paths ===\n")
 
     def status(path):
-        return f" {Fore.LIGHTGREEN_EX}OK{Style.RESET_ALL} " if os.path.exists(path) else f" {Fore.LIGHTRED_EX}XX{Style.RESET_ALL} "
+        return f" {Fore.LIGHTGREEN_EX}OK{Style.RESET_ALL} " if path and os.path.exists(path) else f" {Fore.LIGHTRED_EX}XX{Style.RESET_ALL} "
 
     def row(label, path):
-        rows.append((status(path), label, path))
+        rows.append((status(path), label, path if path else "(not set)"))
 
     rows = []
 
-    row("RetroArch Directory:", SETUP["RETROARCH_DIR"])
-    row("RetroArch Games Directory:", SETUP["GAMES_DIR"])
+    row("RetroArch Directory:", SETUP.get("RETROARCH_DIR"))
+    row("RetroArch Games Root:", SETUP.get("GAMES_DIR"))
 
     for plat in PLATFORMS_ORDERED:
-        path = os.path.join(SETUP["GAMES_DIR"], plat)
+        path = get_games_dir(plat)
         row(f"{plat} Directory:", path)
 
-    row("RetroArch Playlists Directory:", SETUP["RETROARCH_PLAYLIST_DIR"])
-    row("RetroArch Logs Directory:", SETUP["RETROARCH_LOG_DIR"])
-    row("Dolphin Directory:", SETUP["DOLPHIN_DIR"])
-    row("Dolphin playtime:", SETUP["DOLPHIN_PLAYTIME"])
-    row("PCSX2 Directory:", SETUP["PCSX2_DIR"])
-    row("PCSX2 playtime:", SETUP["PCSX2_PLAYTIME"])
-    row("LaunchBox Data:", SETUP["LAUNCHBOX_DATA_DIR"])
+    row("RetroArch Playlists Directory:", SETUP.get("RETROARCH_PLAYLIST_DIR"))
+    row("RetroArch Logs Directory:", SETUP.get("RETROARCH_LOG_DIR"))
+    row("Dolphin Directory:", SETUP.get("DOLPHIN_DIR"))
+    row("Dolphin playtime:", SETUP.get("DOLPHIN_PLAYTIME"))
+    row("PCSX2 Directory:", SETUP.get("PCSX2_DIR"))
+    row("PCSX2 playtime:", SETUP.get("PCSX2_PLAYTIME"))
+    row("LaunchBox Data:", SETUP.get("LAUNCHBOX_DATA_DIR"))
 
-    # ---------- PC Games ----------
     row("Minecraft Directory:", SETUP.get("MINECRF_DIR"))
     row("WoW Retail Directory:", SETUP.get("WOWRE_DIR"))
     row("WoW Classic Era Directory:", SETUP.get("WOWERA_DIR"))
     row("WoW Classic Progression Directory:", SETUP.get("WOWCLA_DIR"))
-
 
     width = max(len(r[1]) for r in rows) + 2
     for s, label, path in rows:
@@ -2890,7 +3158,7 @@ def cmd_check_paths():
     print("\n=== LaunchBox Platform XML ===\n")
 
     xml_rows = []
-    for plat, fname in SETUP["LAUNCHBOX_PLATFORMS"].items():
+    for plat, fname in LAUNCHBOX_PLATFORMS.items():
         path = os.path.join(SETUP["LAUNCHBOX_DATA_DIR"], fname)
         xml_rows.append((
             f" {Fore.LIGHTGREEN_EX}OK{Style.RESET_ALL} " if os.path.exists(path) else f" {Fore.LIGHTRED_EX}XX{Style.RESET_ALL} ",
@@ -2903,8 +3171,9 @@ def cmd_check_paths():
         print(f"[{s}] {plat:<{w}} {fname}")
 
     print("\nStatus:", "ALL SYSTEMS OK" if all(
-        os.path.exists(p) for _, _, p in rows
+        path and os.path.exists(path) for _, _, path in rows
     ) else "ERRORS FOUND")
+
 
 # ---------- Change Retroarch labels ----------
 
@@ -3214,10 +3483,6 @@ def cmd_export_playtime():
     wow_era    = load_wow_playtime(SETUP.get("WOWERA_DIR"))
     wow_classic = load_wow_playtime(SETUP.get("WOWCLA_DIR"))
 
-    CODEWORDS = [
-        "(patched)", "[patched]", "(hack)", "[hack]",
-    ]
-
     out = []
     printed = []
     pc_rows = []
@@ -3493,16 +3758,16 @@ def cmd_link_pictures():
 
     IMAGE_SOURCES = []
     if choice == "1":
-        IMAGE_SOURCES.append((LAUNCHBOX_IMG_DIR, True))
+        IMAGE_SOURCES.append(("LaunchBox", True))
     elif choice == "2":
-        IMAGE_SOURCES.append((RETROARCH_IMG_DIR, True))
+        IMAGE_SOURCES.append(("RetroArch", True))
     elif choice == "3":
-        IMAGE_SOURCES.append((ADITIONAL_IMG_DIR, False))
+        IMAGE_SOURCES.append(("Additional", False))
     elif choice == "4":
         IMAGE_SOURCES.extend([
-            (LAUNCHBOX_IMG_DIR, True),
-            (RETROARCH_IMG_DIR, True),
-            (ADITIONAL_IMG_DIR, False),
+            ("LaunchBox", True),
+            ("RetroArch", True),
+            ("Additional", False),
         ])
     else:
         return
@@ -3515,11 +3780,6 @@ def cmd_link_pictures():
     roms_by_platform = {}
     titles_by_platform = {}
 
-    # ==================================================
-    # LOAD LAUNCHBOX TITLES FROM XML (ROM stem → Title)
-    # Use the LAUNCHBOX_PLATFORMS mapping key (plat) as the
-    # platform key so it matches local_games.txt platform values.
-    # ==================================================
     lb_title_map = {}
 
     for plat, xmlfile in LAUNCHBOX_PLATFORMS.items():
@@ -3536,35 +3796,23 @@ def cmd_link_pictures():
         for g in root.findall("Game"):
             app = g.findtext("ApplicationPath", "").strip()
             title = g.findtext("Title", "").strip()
-            # intentionally use 'plat' (the LAUNCHBOX_PLATFORMS key) here
             if not app or not title:
                 continue
 
             stem = os.path.splitext(os.path.basename(app))[0]
             lb_title_map.setdefault(plat, {})[stem] = title
 
-    # ==================================================
-    # normalizer helper
-    # ==================================================
     def normalize_text(s):
         s = unicodedata.normalize("NFKD", s)
         s = "".join(c for c in s if not unicodedata.combining(c))
-
         s = dash2_re.sub("", s)
         s = tag_re.sub("", s)
-
         s = s.lower()
-
-        # remove common leading/trailing articles anywhere
         for article in ("the", "die", "les"):
             s = re.sub(rf"\b{article}\b", "", s)
-
-        # remove punctuation and separators (including comma)
         s = re.sub(r"[.,\-_\&:\[\]\(\)\s]", "", s)
-
         return s
 
-    # Build reverse mapping: platform -> normalized title -> stem
     title_to_stem = {}
     for platform, m in lb_title_map.items():
         rev = {}
@@ -3573,9 +3821,6 @@ def cmd_link_pictures():
             rev[title] = stem
         title_to_stem[platform] = rev
 
-    # ==================================================
-    # LOAD ROMS FROM local_games.txt (ROM is authoritative)
-    # ==================================================
     for line in rows:
         try:
             platform, _, _, file = [x.strip() for x in line.split("|")]
@@ -3599,30 +3844,24 @@ def cmd_link_pictures():
         platform_printed = False
         titles = titles_by_platform.get(platform, [])
 
-        for root, strict in IMAGE_SOURCES:
-            if not root:
-                continue
+        for source, strict in IMAGE_SOURCES:
+            if source == "RetroArch":
+                roots = [
+                    (get_retroarch_cover_dir(platform), False),
+                    (get_retroarch_screen_dir(platform), False),
+                ] if strict else [(RETROARCH_IMG_DIR, False)]
 
-            if strict:
-                if root == RETROARCH_IMG_DIR:
-                    subdirs = [
-                        (RETROARCH_COVER_SUBDIR, False),
-                        (RETROARCH_SCREEN_SUBDIR, False),
-                    ]
-                else:
-                    subdirs = [
-                        (LAUNCHBOX_COVER_SUBDIR, True),
-                        (LAUNCHBOX_SCREEN_SUBDIR, True),
-                    ]
+            elif source == "LaunchBox":
+                roots = [
+                    (get_launchbox_cover_dir(platform), True),
+                    (get_launchbox_screen_dir(platform), True),
+                ] if strict else [(LAUNCHBOX_IMG_DIR, True)]
+
             else:
-                subdirs = [(None, False)]
+                roots = [(ADITIONAL_IMG_DIR, False)]
 
-            for subdir, is_launchbox in subdirs:
-                img_dir = (
-                    os.path.join(root, platform, subdir)
-                    if subdir else root
-                )
-                if not os.path.isdir(img_dir):
+            for img_dir, is_launchbox in roots:
+                if not img_dir or not os.path.isdir(img_dir):
                     continue
 
                 files = [
@@ -3633,52 +3872,36 @@ def cmd_link_pictures():
                 file_bases = {os.path.splitext(f)[0]: f for f in files}
                 pool = titles if is_launchbox else rom_stems
 
-                # Reserve exact matches so we don't accidentally reassign them
                 reserved_bases = set()
                 for item in pool:
-                    if is_launchbox:
-                        exact_names = {
-                            item,
-                            item.replace("'", "_"),
-                            item.replace(":", "_"),
-                        }
-                        for base in file_bases:
-                            if dash2_re.sub("", base) in exact_names:
-                                reserved_bases.add(base)
-                    else:
-                        exact_names = {
-                            item,
-                            item.replace("&", "_"),
-                        }
-                        for base in file_bases:
-                            if base in exact_names:
-                                reserved_bases.add(base)
+                    exact_names = (
+                        {item, item.replace("'", "_"), item.replace(":", "_"), item.replace("/", "_")}
+                        if is_launchbox else
+                        {item, item.replace("&", "_")}
+                    )
+                    for base in file_bases:
+                        if dash2_re.sub("", base) in exact_names:
+                            reserved_bases.add(base)
 
                 for item in pool:
-                    if is_launchbox:
-                        exact_names = {
-                            item,
-                            item.replace("'", "_"),
-                            item.replace(":", "_"),
-                        }
-                        if any(dash2_re.sub("", b) in exact_names for b in reserved_bases):
-                            continue
-                    else:
-                        exact_names = {
-                            item,
-                            item.replace("&", "_"),
-                        }
-                        if any(b in exact_names for b in reserved_bases):
-                            continue
+                    exact_names = (
+                        {item, item.replace("'", "_"), item.replace(":", "_"), item.replace("/", "_")}
+                        if is_launchbox else
+                        {item, item.replace("&", "_")}
+                    )
+                    if any(
+                        dash2_re.sub("", b) in exact_names if is_launchbox else b in exact_names
+                        for b in reserved_bases
+                    ):
+                        continue
 
                     item_norm = normalize_text(item)
                     matches = []
+
                     for f in files:
                         base = os.path.splitext(f)[0]
                         if base in reserved_bases:
                             continue
-
-                        # allow -XX stripped filename to match
                         if (
                             normalize_text(base) == item_norm or
                             normalize_text(dash2_re.sub("", base)) == item_norm
@@ -3691,39 +3914,19 @@ def cmd_link_pictures():
                     src = matches[0]
                     ext = os.path.splitext(src)[1]
 
-                    # Determine destination naming correctly:
-                    # - Titles are only used to FIND the source image
-                    # - LaunchBox destination names for screenshots/covers must be ROM-stem based
                     if is_launchbox:
-                        rom_stem = None
-                        # primary: lookup via normalized title in title_to_stem keyed by LAUNCHBOX_PLATFORMS key
-                        rom_stem = title_to_stem.get(platform, {}).get(item_norm)
+                        rom_stem = (
+                            title_to_stem.get(platform, {}).get(item_norm) or
+                            title_to_stem.get(platform, {}).get(item)
+                        )
                         if not rom_stem:
-                            rom_stem = title_to_stem.get(platform, {}).get(item)
-                        if not rom_stem:
-                            # fallback: scan lb_title_map entries for platform
-                            lbmap = lb_title_map.get(platform, {})
-                            for s, t in lbmap.items():
-                                if normalize_text(t) == item_norm and s in rom_stems:
-                                    rom_stem = s
-                                    break
-                        if not rom_stem:
-                            # cannot determine rom stem → skip this item
                             continue
-
                         dst = make_launchbox_image_name(platform, rom_stem, ext)
                     else:
-                        # non-launchbox targets use rom stem when pool is rom_stems,
-                        # otherwise fall back to a sanitized title-based filename
-                        if item in rom_stems:
-                            base_name = item
-                        else:
-                            base_name = item.replace("&", "_")
+                        base_name = item.replace("&", "_")
                         dst = base_name + ext
 
-                    if not dst:
-                        continue
-                    if src == dst:
+                    if not dst or src == dst:
                         continue
 
                     planned_jobs.append(
@@ -3762,8 +3965,8 @@ def cmd_sync_covers():
     options = [
         ("LaunchBox", LAUNCHBOX_IMG_DIR),
         ("RetroArch", RETROARCH_IMG_DIR),
-        ("Dolphin", DOLPHIN_IMG_DIR),
-        ("PCSX2", PCSX2_IMG_DIR),
+        ("Dolphin", DOLPHIN_COVER_DIR),
+        ("PCSX2", PCSX2_COVER_DIR),
         ("Exit", None),
     ]
 
@@ -3832,14 +4035,12 @@ def cmd_sync_covers():
 
         # Expanded platform targets (Dolphin / PCSX2 → LB / RA)
         if src_name in ("PCSX2", "Dolphin") and name in ("LaunchBox", "RetroArch"):
-            subdir = (
-                RETROARCH_COVER_SUBDIR
-                if name == "RetroArch"
-                else LAUNCHBOX_COVER_SUBDIR
-            )
-
             for p in plats:
-                full = os.path.join(root, p, subdir)
+                if name == "LaunchBox":
+                    full = get_launchbox_cover_dir(p)
+                else:
+                    full = get_retroarch_cover_dir(p)
+
                 if disabled:
                     print(prefix + "     " + dim_status_plain(full) + " " + full)
                 else:
@@ -3872,13 +4073,16 @@ def cmd_sync_covers():
 
     sync_covers(src_name, src_root, tgt_name, tgt_root)
 
-
 # ---------- Gameplay ----------
 
 def cmd_sync_screenshots():
     global SYNC_BOTH_ACTIVE
 
-    print(f"\n{Fore.LIGHTRED_EX}[WARNING]{Style.RESET_ALL} This will overwrite all images in the target folder. \nAlways uses the most recent screenshot for each game.\n")
+    print(
+        f"\n{Fore.LIGHTRED_EX}[WARNING]{Style.RESET_ALL} "
+        "This will overwrite all images in the target folder.\n"
+        "Always uses the most recent screenshot for each game.\n"
+    )
 
     # =========================================================
     # SOURCE SELECTION
@@ -3896,6 +4100,7 @@ def cmd_sync_screenshots():
     print("Select source of gameplay images:")
     for i, (name, key) in enumerate(sources, 1):
         print(f"{i}) {name}")
+
         if key == "LB":
             print(f"     {status_ok()} {LAUNCHBOX_IMG_DIR}\\<platform>\\{LAUNCHBOX_SCREEN_SUBDIR}")
         elif key == "RA":
@@ -3957,37 +4162,27 @@ def cmd_sync_screenshots():
 
         print(prefix + f"{code}) {name}")
 
-        # -----------------------------------------------------
-        # Only show concrete platform paths for Dolphin / PCSX2
-        # -----------------------------------------------------
         platforms = None
-        show_generic = True
+        generic = True
 
         if src_key == "PCSX2":
             platforms = SYSTEMS["PS2"]["platforms"]
-            show_generic = False
-
+            generic = False
         elif src_key == "DOLPHIN":
             platforms = SYSTEMS["GC"]["platforms"] + SYSTEMS["WII"]["platforms"]
-            show_generic = False
+            generic = False
 
         if name in ("LaunchBox", "Both"):
-            if platforms and not show_generic:
+            if platforms and not generic:
                 for p in platforms:
-                    path = os.path.join(
-                        LAUNCHBOX_IMG_DIR, p, LAUNCHBOX_SCREEN_SUBDIR
-                    )
-                    print(prefix + f"     {status} {path}")
+                    print(prefix + f"     {status} {get_launchbox_screen_dir(p)}")
             else:
                 print(prefix + f"     {status} {LAUNCHBOX_IMG_DIR}\\<platform>\\{LAUNCHBOX_SCREEN_SUBDIR}")
 
         if name in ("RetroArch", "Both"):
-            if platforms and not show_generic:
+            if platforms and not generic:
                 for p in platforms:
-                    path = os.path.join(
-                        RETROARCH_IMG_DIR, p, RETROARCH_SCREEN_SUBDIR
-                    )
-                    print(prefix + f"     {status} {path}")
+                    print(prefix + f"     {status} {get_retroarch_screen_dir(p)}")
             else:
                 print(prefix + f"     {status} {RETROARCH_IMG_DIR}\\<platform>\\{RETROARCH_SCREEN_SUBDIR}")
 
@@ -4067,17 +4262,25 @@ def apply_rename_jobs(rename_jobs):
         # Platform images (thumbnails / screenshots)
         # ----------------------------------
         if platform:
-            rename_platform_images(platform, old_file, new_file)
+            rename_platform_images(platform, rom_dir, old_file, new_file)
 
         # ----------------------------------
         # CUE → BIN handling
         # ----------------------------------
         if old_file.lower().endswith(".cue"):
-            rewrite_cue_file(
-                os.path.join(rom_dir, new_file),
-                cue_base(old_file),
-                cue_base(new_file)
-            )
+            cue_path = None
+            for dirpath, _, files in os.walk(rom_dir):
+                if new_file in files:
+                    cue_path = os.path.join(dirpath, new_file)
+                    break
+
+            if cue_path:
+                try:
+                    rewrite_cue_file(cue_path, cue_base(old_file), cue_base(new_file))
+                except Exception as e:
+                    print(f"Warning: failed to rewrite cue {cue_path}: {e}")
+            else:
+                print(f"Warning: renamed cue '{new_file}' not found under '{rom_dir}'; skipping cue rewrite.")
 
         # ----------------------------------
         # RetroArch playlists (.lpl)
@@ -4170,8 +4373,9 @@ def cmd_modify(arg=None):
     play_rows = load_playtime_export()
 
     try:
-        replacements_local, replacements_play, rename_jobs, time_jobs = \
+        replacements_local, replacements_play, rename_jobs, time_jobs, _ = \
             build_modify_plans(old_lines, new_lines, local_rows, play_rows)
+
     except Exception as e:
         print(e)
         return

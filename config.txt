@@ -10,46 +10,6 @@ PRINT_ALL = True
 # If True, show playtime in seconds rather then h m
 PLAYTIME_SEC = False 
 
-# ---------------- LaunchBox Platform XML ----------------
-LAUNCHBOX_PLATFORMS = {
-    # ---------- Windows ----------
-    "Windows":                                       "Windows.xml",
-	
-    # ---------- Arcade ----------
-    "FBNeo - Arcade Games":                          "Arcade.xml",
-
-    # ---------- Handheld ----------
-    "Handheld Electronic Game":                      "Game & Watch.xml",
-
-    "Nintendo - Game Boy":                           "Nintendo Game Boy.xml",
-    "Nintendo - Game Boy Color":                     "Nintendo Game Boy Color.xml",
-    "Nintendo - Game Boy Advance":                   "Nintendo Game Boy Advance.xml",
-    "Nintendo - Nintendo DS":                        "Nintendo DS.xml",
-    "Nintendo - Nintendo 3DS":                       "Nintendo 3DS.xml",
-
-    # ---------- Nintendo Consoles ----------
-    "Nintendo - Nintendo Entertainment System":      "Nintendo Entertainment System.xml",
-    "Nintendo - Super Nintendo Entertainment System":"Super Nintendo.xml",
-    "Nintendo - Virtual Boy":                        "Nintendo Virtual Boy.xml",
-    "Nintendo - Nintendo 64":                        "Nintendo 64.xml",
-    "Nintendo - GameCube":                           "Nintendo GameCube.xml",
-    "Nintendo - Wii":                                "Nintendo Wii.xml",
-
-    # ---------- Sega ----------
-    "Sega - Master System - Mark III":               "Sega Master System.xml",
-    "Sega - Game Gear":                              "Sega Game Gear.xml",
-    "Sega - Mega Drive - Genesis":                   "Sega Mega Drive.xml",
-    "Sega - Mega-CD - Sega CD":                      "Sega Mega Drive.xml",
-    "Sega - 32X":                                    "Sega Mega Drive.xml",
-    "Sega - Saturn":                                 "Sega Saturn.xml",
-    "Sega - Dreamcast":                              "Sega Dreamcast.xml",
-
-    # ---------- Sony ----------
-    "Sony - PlayStation":                            "Sony Playstation.xml",
-    "Sony - PlayStation 2":                          "Sony Playstation 2.xml",
-    "Sony - PlayStation Portable":                   "Sony PlayStation Portable.xml",
-}
-
 # ---------------- LaunchBox ----------------
 
 LAUNCHBOX_DIR = "H:\\LaunchBox"
@@ -60,58 +20,32 @@ LAUNCHBOX_SCREEN_SUBDIR = "Screenshot - Gameplay"
 
 # ---------------- RetroArch ----------------
 
-RETROARCH_DIR = "C:\\Program Files\\RetroArch\\"
+RETROARCH_DIR = "H:\\LaunchBox\\!Emulators\\RetroArch"
 RETROARCH_CFG_DIR = os.path.join(RETROARCH_DIR, "config")
 RETROARCH_PLAYLIST_DIR = os.path.join(RETROARCH_DIR, "playlists")
 RETROARCH_LOG_DIR = os.path.join(RETROARCH_PLAYLIST_DIR, "logs")
-RETROARCH_IMG_DIR = os.path.join(RETROARCH_DIR, "thumbnails")
 RETROARCH_SCREEN_DIR = os.path.join(RETROARCH_DIR, "screenshots")
+RETROARCH_IMG_DIR = os.path.join(RETROARCH_DIR, "thumbnails")
 RETROARCH_COVER_SUBDIR = "Named_Boxarts"
 RETROARCH_SCREEN_SUBDIR = "Named_Snaps"
 
+# --------------- Games Folder --------------
+
 GAMES_DIR = os.path.join(RETROARCH_DIR, "games")
-
-ARC_DIR  = os.path.join(GAMES_DIR, "FBNeo - Arcade Games")
-
-NGW_DIR  = os.path.join(GAMES_DIR, "Handheld Electronic Game")
-GB_DIR  = os.path.join(GAMES_DIR, "Nintendo - Game Boy")
-GBC_DIR  = os.path.join(GAMES_DIR, "Nintendo - Game Boy Color")
-GBA_DIR  = os.path.join(GAMES_DIR, "Nintendo - Game Boy Advance")
-NDS_DIR  = os.path.join(GAMES_DIR, "Nintendo - Nintendo DS")
-N3DS_DIR = os.path.join(GAMES_DIR, "Nintendo - Nintendo 3DS")
-
-NES_DIR  = os.path.join(GAMES_DIR, "Nintendo - Nintendo Entertainment System")
-SNES_DIR = os.path.join(GAMES_DIR, "Nintendo - Super Nintendo Entertainment System")
-NVB_DIR  = os.path.join(GAMES_DIR, "Nintendo - Virtual Boy")
-N64_DIR  = os.path.join(GAMES_DIR, "Nintendo - Nintendo 64")
-NGC_DIR  = os.path.join(GAMES_DIR, "Nintendo - GameCube")
-WII_DIR  = os.path.join(GAMES_DIR, "Nintendo - Wii")
-
-SMS_DIR  = os.path.join(GAMES_DIR, "Sega - Master System - Mark III")
-SGG_DIR  = os.path.join(GAMES_DIR, "Sega - Game Gear")
-SMD_DIR  = os.path.join(GAMES_DIR, "Sega - Mega Drive - Genesis")
-SCD_DIR  = os.path.join(GAMES_DIR, "Sega - Mega-CD - Sega CD")
-S32X_DIR  = os.path.join(GAMES_DIR, "Sega - 32X")
-SSA_DIR  = os.path.join(GAMES_DIR, "Sega - Saturn")
-SDC_DIR  = os.path.join(GAMES_DIR, "Sega - Dreamcast")
-
-PSX_DIR  = os.path.join(GAMES_DIR, "Sony - PlayStation")
-PS2_DIR  = os.path.join(GAMES_DIR, "Sony - Playstation 2")
-PSP_DIR  = os.path.join(GAMES_DIR, "Sony - PlayStation Portable")
 
 # ---------------- Dolphin ----------------
 
 DOLPHIN_DIR = "C:\\Program Files\\Dolphin Emulator"
 DOLPHIN_TOOL = os.path.join(DOLPHIN_DIR, "DolphinTool.exe")
 DOLPHIN_PLAYTIME = os.path.join(DOLPHIN_DIR, "User", "Config", "TimePlayed.ini")
-DOLPHIN_IMG_DIR = os.path.join(DOLPHIN_DIR, "User", "Cache", "GameCovers")
+DOLPHIN_COVER_DIR = os.path.join(DOLPHIN_DIR, "User", "Cache", "GameCovers")
 DOLPHIN_SCREEN_DIR = os.path.join(DOLPHIN_DIR, "User", "ScreenShots")
 
 # ---------------- PCSX2 ----------------
 
 PCSX2_DIR = "C:\\Program Files\\PCSX2"
 PCSX2_PLAYTIME = os.path.join(PCSX2_DIR, "inis", "playtime.dat")
-PCSX2_IMG_DIR = os.path.join(PCSX2_DIR, "covers")
+PCSX2_COVER_DIR = os.path.join(PCSX2_DIR, "covers")
 PCSX2_SCREEN_DIR = os.path.join(PCSX2_DIR, "snaps")
 
 # ---------------- Minecraft ----------------
@@ -120,10 +54,11 @@ MINECRF_DIR = r"%APPDATA%\\.minecraft"
 
 # ------------- World of Warcraft ------------
 
-WOW_DIR     = r"G:\\World of Warcraft"
-WOWRE_DIR   = os.path.join(WOW_DIR, "_retail_", "WTF", "Account", "RAMARSETH", "SavedVariables")
-WOWERA_DIR  = os.path.join(WOW_DIR, "_classic_era_", "WTF", "Account", "RAMARSETH", "SavedVariables")
-WOWCLA_DIR  = os.path.join(WOW_DIR, "_classic_", "WTF", "Account", "RAMARSETH", "SavedVariables")
+WOW_DIR = r"C:\Program Files\World of Warcraft"
+WOW_ACCOUNT = "<account name>"
+WOWRE_DIR  = os.path.join(WOW_DIR, "_retail_", "WTF", "Account", WOW_ACCOUNT, "SavedVariables")
+WOWERA_DIR = os.path.join(WOW_DIR, "_classic_era_", "WTF", "Account", WOW_ACCOUNT, "SavedVariables")
+WOWCLA_DIR = os.path.join(WOW_DIR, "_classic_", "WTF", "Account", WOW_ACCOUNT, "SavedVariables")
 
 # ----------- Aditional locations ------------
 
@@ -132,3 +67,163 @@ ADITIONAL_IMG_DIR = "H:\\ImagesRAW"
 
 # 2nd playlist location for mobile playlists
 ADITIONAL_PLAYLIST_DIR = os.path.join(RETROARCH_DIR, "playlists", "mobile")
+
+# ----------- Platform nameing ------------
+
+PLATFORMS = {
+
+#    # ---------- Example ----------
+#    "DO NOT CHANGE THIS": {
+#        "games": "name of GAMES_DIR subfolder",
+#        "retroarch": "name of Retroarch Image folder",
+#        "launchbox": "name of Launchbox Image folder",
+#        "xml": "Launchbox Platform name.xml",
+#    },
+
+    # ---------- Arcade ----------
+    "Arcade Games": {
+        "games": "FBNeo - Arcade Games",
+        "retroarch": "FBNeo - Arcade Games",
+        "launchbox": "Arcade",
+        "xml": "Arcade.xml",
+    },
+    # ---------- Handheld ----------
+    "Game & Watch": {
+        "games": "Handheld Electronic Game",
+        "retroarch": "Handheld Electronic Game",
+        "launchbox": "Game & Watch",
+        "xml": "Game & Watch.xml",
+    },
+    "Nintendo - Game Boy": {
+        "games": "Nintendo - Game Boy",
+        "retroarch": "Nintendo - Game Boy",
+        "launchbox": "Nintendo Game Boy Color",
+        "xml": "Nintendo Game Boy Color.xml",
+    },
+    "Nintendo - Game Boy Color": {
+        "games": "Nintendo - Game Boy",
+        "retroarch": "Nintendo - Game Boy",
+        "launchbox": "Nintendo Game Boy Color",
+        "xml": "Nintendo Game Boy Color.xml",
+    },
+    "Nintendo - Game Boy Advance": {
+        "games": "Nintendo - Game Boy Advance",
+        "retroarch": "Nintendo - Game Boy Advance",
+        "launchbox": "Nintendo Game Boy Advance",
+        "xml": "Nintendo Game Boy Advance.xml",
+    },
+    "Nintendo - Nintendo DS": {
+        "games": "Nintendo - Nintendo DS",
+        "retroarch": "Nintendo - Nintendo DS",
+        "launchbox": "Nintendo DS",
+        "xml": "Nintendo DS.xml",
+    },
+    "Nintendo - Nintendo 3DS": {
+        "games": "Nintendo - Nintendo 3DS",
+        "retroarch": "Nintendo - Nintendo 3DS",
+        "launchbox": "Nintendo 3DS",
+        "xml": "Nintendo 3DS.xml",
+    },
+
+    # ---------- Nintendo Consoles ----------
+    "Nintendo - Nintendo Entertainment System": {
+        "games": "Nintendo - Nintendo Entertainment System",
+        "retroarch": "Nintendo - Nintendo Entertainment System",
+        "launchbox": "Nintendo Entertainment System",
+        "xml": "Nintendo Entertainment System.xml",
+    },
+    "Nintendo - Super Nintendo Entertainment System": {
+        "games": "Nintendo - Super Nintendo Entertainment System",
+        "retroarch": "Nintendo - Super Nintendo Entertainment System",
+        "launchbox": "Super Nintendo",
+        "xml": "Super Nintendo.xml",
+    },
+    "Nintendo - Virtual Boy": {
+        "games": "Nintendo - Virtual Boy",
+        "retroarch": "Nintendo - Virtual Boy",
+        "launchbox": "Nintendo Virtual Boy",
+        "xml": "Nintendo Virtual Boy.xml",
+    },
+    "Nintendo - Nintendo 64": {
+        "games": "Nintendo - Nintendo 64",
+        "retroarch": "Nintendo - Nintendo 64",
+        "launchbox": "Nintendo 64",
+        "xml": "Nintendo 64.xml",
+    },
+    "Nintendo - GameCube": {
+        "games": "Nintendo - GameCube",
+        "retroarch": "Nintendo - GameCube",
+        "launchbox": "Nintendo GameCube",
+        "xml": "Nintendo GameCube.xml",
+    },
+    "Nintendo - Wii": {
+        "games": "Nintendo - Wii",
+        "retroarch": "Nintendo - Wii",
+        "launchbox": "Nintendo Wii",
+        "xml": "Nintendo Wii.xml",
+    },
+
+    # ---------- Sega ----------
+    "Sega - Master System - Mark III": {
+        "games": "Sega - Master System - Mark III",
+        "retroarch": "Sega - Master System - Mark III",
+        "launchbox": "Sega Master System",
+        "xml": "Sega Master System.xml",
+    },
+    "Sega - Game Gear": {
+        "games": "Sega - Game Gear",
+        "retroarch": "Sega - Game Gear",
+        "launchbox": "Sega Game Gear",
+        "xml": "Sega Game Gear.xml",
+    },
+    "Sega - Mega Drive - Genesis": {
+        "games": "Sega - Mega Drive - Genesis",
+        "retroarch": "Sega - Mega Drive - Genesis",
+        "launchbox": "Sega Mega Drive",
+        "xml": "Sega Mega Drive.xml",
+    },
+    "Sega - Mega-CD - Sega CD": {
+        "games": "Sega - Mega-CD - Sega CD",
+        "retroarch": "Sega - Mega-CD - Sega CD",
+        "launchbox": "Sega CD",
+        "xml": "Sega CD.xml",
+    },
+    "Sega - 32X": {
+        "games": "Sega - 32X",
+        "retroarch": "Sega - 32X",
+        "launchbox": "Sega 32X",
+        "xml": "Sega 32X.xml",
+    },
+    "Sega - Saturn": {
+        "games": "Sega - Saturn",
+        "retroarch": "Sega - Saturn",
+        "launchbox": "Sega Saturn",
+        "xml": "Sega Saturn.xml",
+    },
+    "Sega - Dreamcast": {
+        "games": "Sega - Dreamcast",
+        "retroarch": "Sega - Dreamcast",
+        "launchbox": "Sega Dreamcast",
+        "xml": "Sega Dreamcast.xml",
+    },
+
+    # ---------- Sony ----------
+    "Sony - PlayStation": {
+        "games": "Sony - PlayStation",
+        "retroarch": "Sony - PlayStation",
+        "launchbox": "Sony Playstation",
+        "xml": "Sony Playstation.xml",
+    },
+    "Sony - PlayStation 2": {
+        "games": "Sony - PlayStation 2",
+        "retroarch": "Sony - PlayStation 2",
+        "launchbox": "Sony Playstation 2",
+        "xml": "Sony Playstation 2.xml",
+    },
+    "Sony - PlayStation Portable": {
+        "games": "Sony - PlayStation Portable",
+        "retroarch": "Sony - PlayStation Portable",
+        "launchbox": "Sony PlayStation Portable",
+        "xml": "Sony PlayStation Portable.xml",
+    },
+}

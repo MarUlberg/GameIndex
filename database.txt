@@ -35864,7 +35864,7 @@ RH6K69 = 해리 포터와 혼혈 왕자
 FCRT = 허드슨의 모험도
 WMOJ = ～あなたが回して救うパズル～ もちもちQ
 
-[Sega - Mega Drive]		
+[Sega - Mega Drive - Genesis]		
 T-48073 = 007 Shitou: The Duel
 MK-1281 = 10 Super Jogos
 T-106273 = 2020 Nen Super Baseball
@@ -37470,6 +37470,49 @@ T-81015-50 = WWF: Rage in the Cage
 G-6027 = Yumemi Yakata no Monogatari
 SG-6027 = Yumemi Yakata no Monogatari
 T-45034 = Yumimi Mix
+
+[Sega - 32X]		
+MK-84507 = After Burner Complete
+MK-84517 = The Amazing Spider-Man: Web of Fire
+T-11505B = BC Racers
+MK-84519 = Blackthorne
+T-8301B = Brutal: Above the Claw
+MK-84700 = Cosmic Carnage
+MK-84580 = Darxide
+MK-84506 = Doom
+MK-84602 = Golf Magazine Presents: 36 Great Holes Starring Fred Couples
+MK-84503 = Knuckles' Chaotix
+MK-84515 = Knuckles' Chaotix
+MK-84518 = Kolibri
+MK-84511 = Metal Head
+T-08101B = Mortal Kombat II
+T-8101B = Mortal Kombat II
+MK-84600 = Motocross Championship
+T-8104B = NBA Jam: Tournament Edition
+T-8102B = NFL Quarterback Club
+T-7001B = Pinocchio
+T-13001B = Pitfall: The Mayan Adventure
+MK-84705 = Primal Rage
+T-04803F = RBI Baseball '95
+T-7601A = Sangokushi IV
+MK-84505 = Space Harrier
+MK-84521 = Star Trek: Starfleet Academy: Starship Bridge Simulator
+MK-84508 = Star Wars Arcade
+GM-04010 = Stellar Assault
+MK-84509 = Stellar Assault
+MK-84520 = T-MEK
+MK-84504 = Tempo
+T-48126 = Time Warner 32X CMD Download Cartridge
+T-5001B = Toughman Contest
+MK-84701 = Virtua Fighter
+MK-84601 = Virtua Racing Deluxe
+MK-1229 = Virtua Racing Deluxe
+MK-8120 = Virtua Racing Deluxe
+MK-84605 = World Series Baseball Starring Deion Sanders
+T-8103B = WWF Raw
+T-8110B = WWF WrestleMania: The Arcade Game
+MK-84512 = Zaxxon's Motherbase
+T-68??? = Zaxxon's Motherbase
 
 [Sega - Saturn]		
 T-6802G = 2do Aru Koto wa Sando R
