@@ -1869,7 +1869,14 @@ def resolve_curated_target(target_key, platform, rom_stem, ext, get_lb_dir, get_
 # ============================================================
 
 # ---------- Processed-screens registry helpers ----------
-PROC_FILE = os.path.join(os.path.dirname(__file__), "processedscreens.txt")
+BASE_DIR = os.path.dirname(
+    sys.executable if getattr(sys, "frozen", False) else __file__
+)
+
+PROC_FILE = os.path.join(BASE_DIR, "processedscreens.txt")
+
+if not os.path.exists(PROC_FILE):
+    open(PROC_FILE, "w", encoding="utf-8").close()
 
 def _normalize_ts_for_compare(ts):
     # Normalize '260205090538' -> '20260205090538' (2-digit year -> 4-digit)
@@ -2646,10 +2653,21 @@ def rename_save_files(old_filename, new_filename, platform=None, system=None):
             for fname in files:
                 base, ext = os.path.splitext(fname)
 
-                if base != oldStem:
+                slot = ""
+                compare_base = base
+
+                # --- MemoryCard rule ---
+                if ext.lower() == ".mcr":
+                    parts = base.rsplit(".", 1)
+                    if len(parts) == 2 and parts[1].isdigit():
+                        compare_base = parts[0]
+                        slot = "." + parts[1]
+
+                if compare_base != oldStem:
                     continue
 
-                newName = newStem + ext
+                newName = newStem + slot + ext
+
                 if newName == fname:
                     continue
 
