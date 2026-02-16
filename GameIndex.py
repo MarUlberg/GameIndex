@@ -60,7 +60,6 @@ def run_scanner_process(env=None, args=None):
 
     subprocess.run(cmd, env=env)
 
-
 CONFIG_FILE = "specialconfig.txt" if os.path.exists("specialconfig.txt") else "config.txt"
 
 def load_setup_minimal(path):
