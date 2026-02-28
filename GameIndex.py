@@ -60,6 +60,7 @@ def run_scanner_process(env=None, args=None):
 
     subprocess.run(cmd, env=env)
 
+
 CONFIG_FILE = "specialconfig.txt" if os.path.exists("specialconfig.txt") else "config.txt"
 
 def load_setup_minimal(path):
@@ -2631,6 +2632,8 @@ def rename_save_files(old_filename, new_filename, platform=None, system=None):
 
     roots = []
 
+    # --- Existing roots ---
+
     # root saves dir
     roots.append(saves_root)
 
@@ -2646,6 +2649,22 @@ def rename_save_files(old_filename, new_filename, platform=None, system=None):
             core_dir = os.path.join(saves_root, core)
             if os.path.isdir(core_dir):
                 roots.append(core_dir)
+
+    # ROM parent folder
+    try:
+        rom_path = find_rom_on_disk(old_filename, platform)
+        if rom_path and os.path.isfile(rom_path):
+            rom_parent = os.path.basename(os.path.dirname(rom_path))
+            extra_dir = os.path.join(saves_root, rom_parent)
+            if os.path.isdir(extra_dir):
+                roots.append(extra_dir)
+    except Exception:
+        # Never break save renaming if ROM lookup fails
+        pass
+    # -----------------------------------------
+
+    # Deduplicate roots
+    roots = list(dict.fromkeys(roots))
 
     for root in roots:
         for dirpath, _, files in os.walk(root):
