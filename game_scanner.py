@@ -278,7 +278,7 @@ SYSTEMS = {
 
     "PS2": {
         "display": "Sony - PlayStation 2",
-        "exts": (".iso", ".chd"),
+        "exts": (".iso", ".chd", ".cue"),
         "db_sections": ["Sony - PlayStation 2"],
         "id_pattern": r"(?:SLES|SLPM|SLUS|SLPS|SCED|SCES|SCUS|SLKA|SCPS|SLED|SCKA|SCAJ|PCPX|PAPX|PBPX|SCCS|TCES|SCPN|TLES|PSXC|SCPM)[_\-\.]?\d{3}[_\-\.]?\d{2}",
         "gameid": ("PS2", True, True, True),
@@ -1593,8 +1593,29 @@ PS2_SCAN_LIMIT = 2 * 1024 * 1024   # 2 MB (reduce for speed, accuracy loss under
 
 def scan_ps2(path):
     SYSTEM = "PS2"
+
     try:
-        with open(path, "rb") as f:
+        data_path = path
+
+        # -----------------------------------------
+        # Resolve BIN if CUE
+        # -----------------------------------------
+        if path.lower().endswith(".cue"):
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    if "FILE" in line.upper():
+                        parts = line.split('"')
+                        if len(parts) >= 2:
+                            data_path = os.path.join(
+                                os.path.dirname(path),
+                                parts[1]
+                            )
+                            break
+
+        # -----------------------------------------
+        # Read data
+        # -----------------------------------------
+        with open(data_path, "rb") as f:
             data = f.read(PS2_SCAN_LIMIT)
 
         text = data.decode("ascii", "ignore")

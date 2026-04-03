@@ -2384,7 +2384,7 @@ def sync_covers(src_name, src_root, tgt_name, tgt_root):
                 platform == "Sony - PlayStation 2"
                 or platform == "Nintendo - GameCube"
                 or platform == "Nintendo - Wii"
-            ) and is_valid_gameid(gameid):
+            ) and gameid and gameid == gameid.upper():
                 key = (platform, gameid)
             else:
                 key = (platform, rom_stem)
@@ -2499,21 +2499,24 @@ def sync_covers(src_name, src_root, tgt_name, tgt_root):
             tgt_dir = DOLPHIN_COVER_DIR
             os.makedirs(tgt_dir, exist_ok=True)
 
-            if gameid and re.fullmatch(VALID_GAMEID_PATTERNS[0], gameid, re.I):
+            if gameid and gameid == gameid.upper():
                 dst_name = gameid + ext
             else:
                 dst_name = sanitize_rom_filename(rom_stem) + ext
+
 
         elif tgt_name == "PCSX2":
             tgt_dir = PCSX2_COVER_DIR
             os.makedirs(tgt_dir, exist_ok=True)
 
-            if gameid and re.fullmatch(VALID_GAMEID_PATTERNS[1], gameid, re.I):
+            if gameid and gameid == gameid.upper():
                 dst_name = gameid + ext
             else:
                 dst_name = sanitize_rom_filename(rom_stem) + ext
 
+
         dst = os.path.join(tgt_dir, dst_name)
+
 
         if os.path.exists(dst):
             if images_identical(src, dst):
